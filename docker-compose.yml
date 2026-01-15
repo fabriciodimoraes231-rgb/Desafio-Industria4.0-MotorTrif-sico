@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # RabbitMQ - Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - motor_network
+
+  # Serviço de Ingestão MQTT
+  mqtt-ingestor:
+    build:
+      context: ./services/mqtt_ingestor
+      dockerfile: Dockerfile
+    container_name: mqtt-ingestor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - MQTT_BROKER=lse.dev.br
+      - MQTT_PORT=1883
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin123
+    restart: unless-stopped
+    networks:
+      - motor_network
+
+  # Servidor OPC UA
+  opcua-server:
+    build:
+      context: ./services/opcua_server
+      dockerfile: Dockerfile
+    container_name: opcua-server
+    ports:
+      - "4840:4840"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin123
+      - OPCUA_ENDPOINT=opc.tcp://0.0.0.0:4840/motor50cv/server
+    volumes:
+      - opcua_data:/app/data
+    restart: unless-stopped
+    networks:
+      - motor_network
+
+  # API FastAPI
+  api-service:
+    build:
+      context: ./services/api_service
+      dockerfile: Dockerfile
+    container_name: api-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      opcua-server:
+        condition: service_started
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin123
+      - OPCUA_ENDPOINT=opc.tcp://opcua-server:4840/motor50cv/server
+      - DATABASE_URL=sqlite:///./data/history.db
+    volumes:
+      - opcua_data:/app/data
+    restart: unless-stopped
+    networks:
+      - motor_network
+
+  # Grafana - Visualização
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=marcusolsson-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - api-service
+    restart: unless-stopped
+    networks:
+      - motor_network
+
+  # MQTT Producer - Gerador de dados simulados
+  mqtt-producer:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile
+    container_name: mqtt-producer
+    environment:
+      - MQTT_HOST=lse.dev.br
+      - MQTT_PORT=1883
+      - ALARM_RATE=0.1
+      - INTERVAL=2.0
+    profiles:
+      - producer
+    restart: unless-stopped
+    networks:
+      - motor_network
+
+volumes:
+  rabbitmq_data:
+  opcua_data:
+  api_data:
+  grafana_data:
+
+networks:
+  motor_network:
+    driver: bridge

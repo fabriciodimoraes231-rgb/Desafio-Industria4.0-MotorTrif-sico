@@ -1,0 +1,2 @@
+# Dependências do MQTT Producer
+gmqtt>=0.6.0

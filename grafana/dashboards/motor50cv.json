@@ -1,0 +1,311 @@
+{
+  "uid": "motor50cv-main",
+  "title": "Motor 50CV - Monitoramento Completo",
+  "tags": ["motor", "50cv", "monitoramento", "industria4.0"],
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "2s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "row",
+      "title": "🚨 ALARMES ATIVOS",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 200,
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Total Alarmes",
+      "gridPos": { "h": 3, "w": 4, "x": 0, "y": 1 },
+      "id": 201,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/alarms?limit=1000", "fields": [{ "jsonPath": "$.active_count", "name": "Ativos" }] }],
+      "fieldConfig": { "defaults": { "unit": "none", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] } } },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "table",
+      "title": "🚨 Últimos Alarmes",
+      "gridPos": { "h": 6, "w": 20, "x": 4, "y": 1 },
+      "id": 202,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{
+        "refId": "A",
+        "method": "GET",
+        "urlPath": "/api/v1/motor/alarms?limit=10",
+        "fields": [
+          { "jsonPath": "$.alarms[*].timestamp", "name": "Data/Hora" },
+          { "jsonPath": "$.alarms[*].category", "name": "Categoria" },
+          { "jsonPath": "$.alarms[*].severity_name", "name": "Severidade" },
+          { "jsonPath": "$.alarms[*].message", "name": "Mensagem" },
+          { "jsonPath": "$.alarms[*].value", "name": "Valor" }
+        ]
+      }],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Severidade" }, "properties": [{ "id": "custom.cellOptions", "value": { "type": "color-background" } }, { "id": "mappings", "value": [{ "type": "value", "options": { "CRITICAL": { "color": "red", "text": "🔴 CRÍTICO" }, "HIGH": { "color": "orange", "text": "🟠 ALTO" }, "MEDIUM": { "color": "yellow", "text": "🟡 MÉDIO" } } }] }] },
+          { "matcher": { "id": "byName", "options": "Categoria" }, "properties": [{ "id": "mappings", "value": [{ "type": "value", "options": { "Electrical": { "text": "⚡ Elétrica" }, "Environment": { "text": "🌡️ Ambiente" }, "Vibration": { "text": "📳 Vibração" } } }] }] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    },
+    {
+      "type": "row",
+      "title": "📊 Valores em Tempo Real",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "id": 100,
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Tensão A",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 8 },
+      "id": 1,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.voltage.a", "name": "V" }] }],
+      "fieldConfig": { "defaults": { "unit": "volt", "min": 190, "max": 250, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 198 }, { "color": "green", "value": 210 }, { "color": "yellow", "value": 230 }, { "color": "red", "value": 242 }] } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Tensão B",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 8 },
+      "id": 2,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.voltage.b", "name": "V" }] }],
+      "fieldConfig": { "defaults": { "unit": "volt", "min": 190, "max": 250, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 198 }, { "color": "green", "value": 210 }, { "color": "yellow", "value": 230 }, { "color": "red", "value": 242 }] } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Tensão C",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 8 },
+      "id": 3,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.voltage.c", "name": "V" }] }],
+      "fieldConfig": { "defaults": { "unit": "volt", "min": 190, "max": 250, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 198 }, { "color": "green", "value": 210 }, { "color": "yellow", "value": 230 }, { "color": "red", "value": 242 }] } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "gauge",
+      "title": "🌡️ Temp. Carcaça",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 8 },
+      "id": 4,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.environment.caseTemperature", "name": "°C" }] }],
+      "fieldConfig": { "defaults": { "unit": "celsius", "min": 20, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 55 }, { "color": "red", "value": 60 }] } } },
+      "options": { "showThresholdMarkers": true, "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "gauge",
+      "title": "⚡ Potência Ativa",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 8 },
+      "id": 5,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.power.active", "name": "W" }] }],
+      "fieldConfig": { "defaults": { "unit": "watt", "min": 0, "max": 8000, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 6000 }, { "color": "red", "value": 7000 }] } } },
+      "options": { "showThresholdMarkers": true, "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "📈 Fator Potência",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 8 },
+      "id": 6,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.powerFactor", "name": "FP" }] }],
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 3, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.9 }] } } },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Corrente A",
+      "gridPos": { "h": 3, "w": 3, "x": 0, "y": 12 },
+      "id": 7,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.current.a", "name": "A" }] }],
+      "fieldConfig": { "defaults": { "unit": "amp", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 11 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Corrente B",
+      "gridPos": { "h": 3, "w": 3, "x": 3, "y": 12 },
+      "id": 8,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.current.b", "name": "A" }] }],
+      "fieldConfig": { "defaults": { "unit": "amp", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 11 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Corrente C",
+      "gridPos": { "h": 3, "w": 3, "x": 6, "y": 12 },
+      "id": 9,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.current.c", "name": "A" }] }],
+      "fieldConfig": { "defaults": { "unit": "amp", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 11 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Frequência",
+      "gridPos": { "h": 3, "w": 3, "x": 9, "y": 12 },
+      "id": 10,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.electrical.frequency", "name": "Hz" }] }],
+      "fieldConfig": { "defaults": { "unit": "hertz", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 59 }, { "color": "red", "value": 61 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Vibração Axial",
+      "gridPos": { "h": 3, "w": 3, "x": 12, "y": 12 },
+      "id": 11,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.vibration.axial", "name": "mm/s" }] }],
+      "fieldConfig": { "defaults": { "unit": "velocitymmps", "decimals": 3, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.3 }, { "color": "red", "value": 0.5 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Vibração Radial",
+      "gridPos": { "h": 3, "w": 3, "x": 15, "y": 12 },
+      "id": 12,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.vibration.radial", "name": "mm/s" }] }],
+      "fieldConfig": { "defaults": { "unit": "velocitymmps", "decimals": 3, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.3 }, { "color": "red", "value": 0.5 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Temp. Ambiente",
+      "gridPos": { "h": 3, "w": 3, "x": 18, "y": 12 },
+      "id": 13,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.environment.temperature", "name": "°C" }] }],
+      "fieldConfig": { "defaults": { "unit": "celsius", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }, { "color": "green", "value": 20 }, { "color": "yellow", "value": 35 }, { "color": "red", "value": 40 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Umidade",
+      "gridPos": { "h": 3, "w": 3, "x": 21, "y": 12 },
+      "id": 14,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [{ "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/latest", "fields": [{ "jsonPath": "$.environment.humidity", "name": "%" }] }],
+      "fieldConfig": { "defaults": { "unit": "humidity", "thresholds": { "mode": "absolute", "steps": [{ "color": "yellow", "value": null }, { "color": "green", "value": 40 }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 80 }] } } },
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "row",
+      "title": "📈 Histórico - Tensões e Correntes",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 101,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Histórico de Tensões (V)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 20,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [
+        { "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/history/VoltageA?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Tensão A" }] },
+        { "refId": "B", "method": "GET", "urlPath": "/api/v1/motor/history/VoltageB?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Tensão B" }] },
+        { "refId": "C", "method": "GET", "urlPath": "/api/v1/motor/history/VoltageC?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Tensão C" }] }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "volt", "min": 180, "max": 270, "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Tensão A" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Tensão B" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Tensão C" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Histórico de Correntes (A)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 21,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [
+        { "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/history/CurrentA?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Corrente A" }] },
+        { "refId": "B", "method": "GET", "urlPath": "/api/v1/motor/history/CurrentB?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Corrente B" }] },
+        { "refId": "C", "method": "GET", "urlPath": "/api/v1/motor/history/CurrentC?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Corrente C" }] }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "amp", "min": 8, "max": 14, "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Corrente A" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Corrente B" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Corrente C" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row",
+      "title": "📈 Histórico - Temperatura e Potência",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 102,
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Histórico Temperatura Carcaça (°C)",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
+      "id": 22,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [
+        { "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/history/CaseTemperature?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Temp. Carcaça" }] }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 30,
+          "max": 90,
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme", "spanNulls": true, "thresholdsStyle": { "mode": "line" } },
+          "color": { "mode": "continuous-GrYlRd" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 55 }, { "color": "red", "value": 60 }] }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Histórico Potência (W)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
+      "id": 23,
+      "datasource": { "type": "marcusolsson-json-datasource", "uid": "PC2F003280D19B538" },
+      "targets": [
+        { "refId": "A", "method": "GET", "urlPath": "/api/v1/motor/history/PowerActive?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Potência Ativa" }] },
+        { "refId": "B", "method": "GET", "urlPath": "/api/v1/motor/history/PowerReactive?limit=300", "fields": [{ "jsonPath": "$.data[*].timestamp", "name": "time", "type": "time" }, { "jsonPath": "$.data[*].value", "name": "Potência Reativa" }] }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "watt", "custom": { "lineWidth": 2, "fillOpacity": 15, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Potência Ativa" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Potência Reativa" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 32 },
+      "id": 99,
+      "options": {
+        "mode": "markdown",
+        "content": "---\n### 🏭 Sistema de Monitoramento Motor 50CV - Indústria 4.0\n**Fluxo de Dados:** MQTT Producer → Broker → Ingestor → RabbitMQ → OPC UA Server → API REST → Grafana\n\n**Regras de Alarme:** Tensão ±10% (220V±22V) | Corrente >10% (>11A) | Temp. Carcaça >60°C"
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "version": 2
+}
