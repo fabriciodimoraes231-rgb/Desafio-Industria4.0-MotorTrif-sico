@@ -31,7 +31,7 @@ class CurrentData(BaseModel):
 class PowerData(BaseModel):
     """Modelo para dados de potência."""
     active: float = Field(..., ge=0, description="Potência ativa (W)")
-    reactive: float = Field(..., ge=0, description="Potência reativa (VAr)")
+    reactive: float = Field(..., description="Potência reativa (VAr) - pode ser negativa em cargas capacitivas")
     apparent: float = Field(..., ge=0, description="Potência aparente (VA)")
 
 

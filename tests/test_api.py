@@ -5,7 +5,7 @@ Este módulo contém testes para os endpoints da API REST.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient
 import asyncio
@@ -34,7 +34,7 @@ class MockDataService:
         
     async def get_latest(self):
         return {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "electrical": {
                 "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
                 "current": {"a": 10.5, "b": 10.4, "c": 10.6},
@@ -58,12 +58,12 @@ class MockDataService:
     async def get_history(self, variable, start_time, end_time, limit):
         return {
             "variable": variable,
-            "start_time": start_time or datetime.utcnow() - timedelta(hours=24),
-            "end_time": end_time or datetime.utcnow(),
+            "start_time": start_time or datetime.now(timezone.utc) - timedelta(hours=24),
+            "end_time": end_time or datetime.now(timezone.utc),
             "count": 2,
             "data": [
-                {"timestamp": datetime.utcnow().isoformat(), "value": 220.5, "quality": "Good"},
-                {"timestamp": (datetime.utcnow() - timedelta(minutes=5)).isoformat(), "value": 220.3, "quality": "Good"}
+                {"timestamp": datetime.now(timezone.utc).isoformat(), "value": 220.5, "quality": "Good"},
+                {"timestamp": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(), "value": 220.3, "quality": "Good"}
             ]
         }
         
@@ -74,7 +74,7 @@ class MockDataService:
             "alarms": [
                 {
                     "id": "test_alarm_1",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "category": "Electrical",
                     "severity": 700,
                     "severity_name": "HIGH",
@@ -138,7 +138,7 @@ class TestMotorLatestResponse:
     def test_create_response(self):
         """Testa criação de resposta."""
         data = {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "electrical": {
                 "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
                 "current": {"a": 10.5, "b": 10.4, "c": 10.6},
@@ -174,11 +174,11 @@ class TestHistoryResponse:
         """Testa criação de resposta de histórico."""
         data = {
             "variable": "VoltageA",
-            "start_time": datetime.utcnow() - timedelta(hours=24),
-            "end_time": datetime.utcnow(),
+            "start_time": datetime.now(timezone.utc) - timedelta(hours=24),
+            "end_time": datetime.now(timezone.utc),
             "count": 100,
             "data": [
-                {"timestamp": datetime.utcnow(), "value": 220.5, "quality": "Good"}
+                {"timestamp": datetime.now(timezone.utc), "value": 220.5, "quality": "Good"}
             ]
         }
         
@@ -200,7 +200,7 @@ class TestAlarmsListResponse:
             "alarms": [
                 {
                     "id": "alarm_1",
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": datetime.now(timezone.utc),
                     "category": "Electrical",
                     "severity": 700,
                     "severity_name": "HIGH",
@@ -307,7 +307,7 @@ class TestHealthResponse:
         
         response = HealthResponse(
             status="healthy",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             version="1.0.0",
             services={
                 "database": "connected",
@@ -325,7 +325,7 @@ class TestHealthResponse:
         
         response = HealthResponse(
             status="degraded",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             version="1.0.0",
             services={
                 "database": "connected",

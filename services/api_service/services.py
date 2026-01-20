@@ -7,7 +7,7 @@ RabbitMQ e servidor OPC UA.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 import aiosqlite
 import aio_pika
@@ -138,7 +138,7 @@ class DataService:
             self._rabbitmq_conn = await aio_pika.connect_robust(url)
             channel = await self._rabbitmq_conn.channel()
             
-            # Consumir da fila que recebe todas as mensagens
+            # Consumir da fila que recebe todas as mensagens (motor.# routing key)
             queue_name = "motor_readings.all"
             
             try:
@@ -181,7 +181,7 @@ class DataService:
             data: Dados recebidos do RabbitMQ
         """
         sensor_type = data.get('_sensor_type', '')
-        timestamp = data.get('timestamp', datetime.utcnow().isoformat())
+        timestamp = data.get('timestamp', datetime.now(timezone.utc).isoformat())
         
         values = self._extract_values(sensor_type, data)
         
@@ -191,7 +191,7 @@ class DataService:
                 'timestamp': timestamp
             }
             
-        self._last_update = datetime.utcnow()
+        self._last_update = datetime.now(timezone.utc)
         
     def _extract_values(self, sensor_type: str, data: Dict) -> Dict[str, float]:
         """Extrai valores das variáveis de uma mensagem."""
@@ -253,7 +253,7 @@ class DataService:
             return v.get('value', 0) if isinstance(v, dict) else 0
             
         return {
-            "timestamp": self._last_update or datetime.utcnow(),
+            "timestamp": self._last_update or datetime.now(timezone.utc),
             "electrical": {
                 "voltage": {
                     "a": get_val("VoltageA"),
@@ -336,7 +336,7 @@ class DataService:
         Returns:
             Dicionário com dados históricos
         """
-        end_time = end_time or datetime.utcnow()
+        end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(hours=24))
         
         try:
@@ -399,7 +399,7 @@ class DataService:
         Returns:
             Dicionário com lista de alarmes
         """
-        end_time = end_time or datetime.utcnow()
+        end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(days=7))
         
         try:
@@ -499,7 +499,7 @@ class DataService:
         Returns:
             Estatísticas (min, max, avg, count)
         """
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         try:
             cursor = await self._db.execute("""

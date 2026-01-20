@@ -7,7 +7,7 @@ para variáveis do servidor OPC UA, utilizando SQLite como backend.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 import aiosqlite
 from dataclasses import dataclass
@@ -188,7 +188,7 @@ class Historian:
         if variable_name not in self.historized_variables:
             return
             
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or datetime.now(timezone.utc)
         
         # Adicionar ao buffer
         self._write_buffer.append(HistoricalDataPoint(
@@ -209,7 +209,7 @@ class Historian:
             values: Dicionário com nome da variável e valor
             timestamp: Data/hora comum para todos os registros
         """
-        timestamp = timestamp or datetime.utcnow()
+        timestamp = timestamp or datetime.now(timezone.utc)
         
         for variable_name, value in values.items():
             await self.record(variable_name, value, timestamp)
@@ -297,10 +297,10 @@ class Historian:
         """
         # Determinar período
         if hours:
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(hours=hours)
         else:
-            end_time = end_time or datetime.utcnow()
+            end_time = end_time or datetime.now(timezone.utc)
             start_time = start_time or (end_time - timedelta(hours=24))
             
         try:
@@ -348,7 +348,7 @@ class Historian:
         Returns:
             Lista de alarmes
         """
-        end_time = end_time or datetime.utcnow()
+        end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(days=7))
         
         try:
@@ -395,7 +395,7 @@ class Historian:
         Args:
             days_to_keep: Número de dias de dados a manter
         """
-        cutoff = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
         
         try:
             # Limpar histórico de variáveis
@@ -425,7 +425,7 @@ class Historian:
         Returns:
             Dicionário com min, max, avg, count
         """
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         try:
             cursor = await self._db.execute("""

@@ -10,7 +10,7 @@ import asyncio
 import json
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 import aio_pika
@@ -96,7 +96,7 @@ class DataGenerator:
         reactive_power = apparent_power * (1 - power_factor**2)**0.5
         
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "voltage": {
                 "a": round(voltage_a, 1),
                 "b": round(voltage_b, 1),
@@ -134,7 +134,7 @@ class DataGenerator:
         base_temp = 45.0 if not simulate_alarm else 65.0
         
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "temperature": round(random.uniform(25, 35), 1),
             "humidity": round(random.uniform(40, 70), 1),
             "caseTemperature": round(base_temp + random.uniform(-5, 5), 1)
@@ -148,7 +148,7 @@ class DataGenerator:
             Dicionário com dados de vibração simulados
         """
         return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "axial": round(random.uniform(0.05, 0.25), 3),
             "radial": round(random.uniform(0.05, 0.30), 3)
         }
@@ -166,7 +166,7 @@ class DataGenerator:
             
         # Adicionar metadados
         data['_sensor_type'] = sensor_type
-        data['_received_at'] = datetime.utcnow().isoformat()
+        data['_received_at'] = datetime.now(timezone.utc).isoformat()
         
         message = Message(
             body=json.dumps(data).encode(),

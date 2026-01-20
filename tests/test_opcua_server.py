@@ -6,7 +6,7 @@ historiador e consumidor RabbitMQ.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
 import os
@@ -91,7 +91,7 @@ class AlarmManager:
     def check_alarms(self, values: Dict[str, Any]) -> List[AlarmEvent]:
         """Verifica condições e gera alarmes."""
         new_alarms = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         for rule in self._rules:
             try:

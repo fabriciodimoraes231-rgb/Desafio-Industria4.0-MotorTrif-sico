@@ -10,7 +10,7 @@ Este módulo implementa o servidor OPC UA completo com suporte a:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 from asyncua import Server, ua
 from asyncua.common.node import Node
@@ -193,7 +193,7 @@ class OPCUAServer:
             
             # Extrair timestamp
             timestamp_str = data.get("timestamp")
-            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")) if timestamp_str else datetime.utcnow()
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")) if timestamp_str else datetime.now(timezone.utc)
             
             # Atualizar variáveis OPC UA
             await self._update_variables(values, timestamp)
@@ -229,7 +229,7 @@ class OPCUAServer:
                     dv = ua.DataValue(
                         ua.Variant(float(value), ua.VariantType.Double),
                         SourceTimestamp=timestamp,
-                        ServerTimestamp=datetime.utcnow()
+                        ServerTimestamp=datetime.now(timezone.utc)
                     )
                     await node.write_value(dv)
                 except Exception as e:
@@ -291,7 +291,7 @@ class OPCUAServer:
             Dicionário com variáveis e valores
         """
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "variables": self._last_values.copy(),
             "alarm_count": len(self.alarm_manager.get_active_alarms()) if self.alarm_manager else 0
         }

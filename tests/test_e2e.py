@@ -15,7 +15,7 @@ import json
 import time
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from enum import IntEnum
 from dataclasses import dataclass, field
@@ -77,7 +77,7 @@ class AlarmManager:
     def check_alarms(self, values: Dict[str, Any]) -> List[AlarmEvent]:
         """Verifica condições e gera alarmes."""
         new_alarms = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         for rule in self._rules:
             try:
@@ -151,7 +151,7 @@ class TestE2EDataFlow:
     def test_mqtt_message_format_electrical(self):
         """Testa formato de mensagem MQTT elétrica."""
         message = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
             "current": {"a": 10.5, "b": 10.4, "c": 10.6},
             "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -169,7 +169,7 @@ class TestE2EDataFlow:
     def test_mqtt_message_format_environment(self):
         """Testa formato de mensagem MQTT ambiental."""
         message = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "temperature": 34.5,
             "humidity": 55.2,
             "caseTemperature": 45.0
@@ -182,7 +182,7 @@ class TestE2EDataFlow:
     def test_mqtt_message_format_vibration(self):
         """Testa formato de mensagem MQTT de vibração."""
         message = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "axial": 0.12,
             "radial": 0.15
         }
@@ -199,7 +199,7 @@ class TestE2EValidation:
         from validators import ElectricalReading
         
         raw_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
             "current": {"a": 10.5, "b": 10.4, "c": 10.6},
             "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -219,7 +219,7 @@ class TestE2EValidation:
         from validators import EnvironmentReading
         
         raw_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "temperature": 34.5,
             "humidity": 55.2,
             "caseTemperature": 45.0
@@ -236,7 +236,7 @@ class TestE2EValidation:
         from validators import VibrationReading
         
         raw_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "axial": 0.12,
             "radial": 0.15
         }
@@ -419,7 +419,7 @@ class TestE2ECompleteScenario:
         
         # 1. Simular dados recebidos via MQTT
         electrical_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
             "current": {"a": 10.5, "b": 10.4, "c": 10.6},
             "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -429,14 +429,14 @@ class TestE2ECompleteScenario:
         }
         
         environment_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "temperature": 34.5,
             "humidity": 55.2,
             "caseTemperature": 45.0
         }
         
         vibration_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "axial": 0.12,
             "radial": 0.15
         }
@@ -493,7 +493,7 @@ class TestE2ECompleteScenario:
         
         # 1. Simular dados com problema
         electrical_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {"a": 250.0, "b": 221.0, "c": 219.0},
             "current": {"a": 10.5, "b": 10.4, "c": 10.6},
             "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -503,7 +503,7 @@ class TestE2ECompleteScenario:
         }
         
         environment_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "temperature": 34.5,
             "humidity": 55.2,
             "caseTemperature": 75.0
@@ -564,7 +564,7 @@ class TestE2EPerformance:
         from validators import ElectricalReading
         
         data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
             "current": {"a": 10.5, "b": 10.4, "c": 10.6},
             "power": {"active": 4500, "reactive": 500, "apparent": 4600},

@@ -36,8 +36,8 @@ class Settings(BaseSettings):
     # OPC UA Configuration
     opcua_endpoint: str = "opc.tcp://opcua-server:4840/motor50cv/server"
     
-    # Database Configuration
-    database_url: str = "sqlite:///./data/motor.db"
+    # Database Configuration (mesmo banco do OPC UA para compartilhar dados)
+    database_url: str = "sqlite:///./data/history.db"
     
     # RabbitMQ Configuration (para consumo direto se necessário)
     rabbitmq_host: str = "rabbitmq"

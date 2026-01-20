@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import aio_pika
 from aio_pika import Message, DeliveryMode, ExchangeType
 
@@ -132,7 +132,7 @@ class RabbitMQPublisher:
             
         # Adicionar metadados
         message_data['_sensor_type'] = sensor_type
-        message_data['_received_at'] = datetime.utcnow().isoformat()
+        message_data['_received_at'] = datetime.now(timezone.utc).isoformat()
         
         # Determinar routing key
         rk = routing_key or f"motor.{sensor_type}"

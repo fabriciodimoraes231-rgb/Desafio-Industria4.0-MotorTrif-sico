@@ -5,7 +5,7 @@ Este módulo define os endpoints REST para consulta de dados
 do motor 50CV.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 
@@ -254,7 +254,13 @@ async def list_variables():
         "all_variables": AVAILABLE_VARIABLES,
         "historized_variables": HISTORIZED_VARIABLES,
         "categories": {
-            "electrical": [v for v in AVAILABLE_VARIABLES if v.startswith(("Voltage", "Current", "Power", "Energy", "Frequency"))],
+            "electrical": [
+                "VoltageA", "VoltageB", "VoltageC",
+                "CurrentA", "CurrentB", "CurrentC",
+                "PowerActive", "PowerReactive", "PowerApparent",
+                "EnergyActive", "EnergyReactive", "EnergyApparent",
+                "PowerFactor", "Frequency"
+            ],
             "environment": ["Temperature", "Humidity", "CaseTemperature"],
             "vibration": ["Axial", "Radial"]
         }
@@ -302,7 +308,7 @@ async def get_timeseries(
             detail=f"Variável '{variable}' não possui histórico"
         )
         
-    end_time = end_time or datetime.utcnow()
+    end_time = end_time or datetime.now(timezone.utc)
     start_time = start_time or (end_time - timedelta(hours=1))
     
     data = await service.get_history(variable, start_time, end_time, limit)

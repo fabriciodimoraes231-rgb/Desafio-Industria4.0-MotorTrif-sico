@@ -22,7 +22,7 @@ import os
 import random
 import signal
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
@@ -141,7 +141,7 @@ class DataGenerator:
         frequency = cfg.nominal_frequency + random.uniform(-0.5, 0.5)
         
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "voltage": {
                 "a": round(voltage_a, 2),
                 "b": round(voltage_b, 2),
@@ -186,7 +186,7 @@ class DataGenerator:
             case_temperature = random.uniform(*cfg.case_temp_range)
         
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "temperature": round(temperature, 1),
             "humidity": round(humidity, 1),
             "caseTemperature": round(case_temperature, 1)
@@ -207,7 +207,7 @@ class DataGenerator:
             radial = random.uniform(*cfg.vibration_range)
         
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "axial": round(axial, 3),
             "radial": round(radial, 3)
         }

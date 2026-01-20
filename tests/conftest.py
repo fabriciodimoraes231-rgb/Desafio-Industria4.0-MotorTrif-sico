@@ -7,7 +7,7 @@ Este módulo contém fixtures e configurações compartilhadas.
 import pytest
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Adicionar paths dos serviços ao PYTHONPATH
 SERVICES_PATH = os.path.join(os.path.dirname(__file__), '..', 'services')
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(SERVICES_PATH, 'api_service'))
 def sample_electrical_data():
     """Dados elétricos de exemplo para testes."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "voltage": {"a": 220.0, "b": 221.0, "c": 219.0},
         "current": {"a": 10.5, "b": 10.4, "c": 10.6},
         "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -34,7 +34,7 @@ def sample_electrical_data():
 def sample_environment_data():
     """Dados ambientais de exemplo para testes."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "temperature": 34.5,
         "humidity": 55.2,
         "caseTemperature": 45.0
@@ -45,7 +45,7 @@ def sample_environment_data():
 def sample_vibration_data():
     """Dados de vibração de exemplo para testes."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "axial": 0.12,
         "radial": 0.15
     }
@@ -55,7 +55,7 @@ def sample_vibration_data():
 def overvoltage_electrical_data():
     """Dados elétricos com sobretensão para testes."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "voltage": {"a": 250.0, "b": 221.0, "c": 219.0},  # Fase A com sobretensão
         "current": {"a": 10.5, "b": 10.4, "c": 10.6},
         "power": {"active": 4500, "reactive": 500, "apparent": 4600},
@@ -69,7 +69,7 @@ def overvoltage_electrical_data():
 def critical_temperature_environment_data():
     """Dados ambientais com temperatura crítica para testes."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "temperature": 34.5,
         "humidity": 55.2,
         "caseTemperature": 75.0  # Temperatura crítica >60°C

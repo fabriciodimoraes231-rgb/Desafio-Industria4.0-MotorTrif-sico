@@ -8,10 +8,11 @@ e configurações para o serviço de API do Motor 50CV.
 import logging
 import sys
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
@@ -128,7 +129,7 @@ async def health_check():
         
     return HealthResponse(
         status=overall_status,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         version=settings.api_version,
         services=services_status
     )
@@ -168,7 +169,7 @@ async def root():
 async def global_exception_handler(request, exc):
     """Handler global de exceções."""
     logger.error(f"Erro não tratado: {exc}")
-    raise HTTPException(
+    return JSONResponse(
         status_code=500,
-        detail="Erro interno do servidor"
+        content={"detail": "Erro interno do servidor"}
     )

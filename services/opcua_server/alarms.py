@@ -6,7 +6,7 @@ monitorando os valores das variáveis e gerando alertas conforme as regras.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, List, Any
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -285,7 +285,7 @@ class AlarmManager:
                 if rule.name not in self.active_alarms:
                     # Criar novo alarme
                     alarm = AlarmEvent(
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         category=rule.category,
                         severity=rule.severity,
                         message=rule.get_message(value),
