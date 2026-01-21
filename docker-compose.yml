@@ -98,10 +98,17 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_PASSWORD=tpv@2026
       - GF_INSTALL_PLUGINS=marcusolsson-json-datasource
+      # Permitir login anônimo para visualização (opcional)
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      # Desabilitar troca de senha no primeiro login
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
-      - grafana_data:/var/lib/grafana
+      # Não persistir dados do Grafana para evitar problemas de senha
+      # Se precisar persistir, remova o comentário abaixo e comente a linha grafana_data_temp
+      # - grafana_data:/var/lib/grafana
+      - grafana_data_temp:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
@@ -132,6 +139,9 @@ volumes:
   opcua_data:
   api_data:
   grafana_data:
+  grafana_data_temp:
+    # Volume temporário - dados são perdidos ao recriar container
+    # Isso garante que a senha do docker-compose sempre será usada
 
 networks:
   motor_network:

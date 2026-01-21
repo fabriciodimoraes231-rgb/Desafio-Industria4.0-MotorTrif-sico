@@ -11,14 +11,15 @@ Este módulo implementa o servidor OPC UA completo com suporte a:
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
+from datetime import timedelta
 from asyncua import Server, ua
 from asyncua.common.node import Node
 
 from config import Settings, get_settings
 from nodeset import NodesetBuilder
 from alarms import AlarmManager
-from historian import Historian
+from history_storage import HistoryStorageSQLite
 from rabbitmq_consumer import RabbitMQConsumer, extract_variable_values
 
 logger = logging.getLogger(__name__)
@@ -62,11 +63,12 @@ class OPCUAServer:
         self.namespace_idx: Optional[int] = None
         self.nodes: Dict[str, Node] = {}
         self.alarm_manager: Optional[AlarmManager] = None
-        self.historian: Optional[Historian] = None
+        self.history_storage: Optional[HistoryStorageSQLite] = None
         self.rabbitmq_consumer: Optional[RabbitMQConsumer] = None
         self._running = False
         self._lds_task: Optional[asyncio.Task] = None
         self._last_values: Dict[str, float] = {}
+        self._historized_nodes: List[Node] = []
         self._stats = {
             "messages_processed": 0,
             "alarms_generated": 0,
@@ -101,9 +103,15 @@ class OPCUAServer:
         nodeset_builder = NodesetBuilder(self.server, self.namespace_idx)
         self.nodes = await nodeset_builder.build()
         
-        # Inicializar historiador
-        self.historian = Historian(self.settings)
-        await self.historian.initialize()
+        # Configurar HistoryStorage unificado para OPC UA e API REST
+        # - Clientes OPC UA (UA Expert) acessam via HistoryRead
+        # - API REST (Grafana) acessa via métodos get_history_for_api
+        self.history_storage = HistoryStorageSQLite(
+            db_path=self.settings.database_path,
+            max_history_data_response_size=10000
+        )
+        await self.history_storage.init()
+        self.server.iserver.history_manager.set_storage(self.history_storage)
         
         # Inicializar gerenciador de alarmes
         self.alarm_manager = AlarmManager(self.server, self.nodes, self.settings)
@@ -133,6 +141,9 @@ class OPCUAServer:
         self._running = True
         
         logger.info(f"Servidor OPC UA rodando em: {self.settings.opcua_endpoint}")
+        
+        # Habilitar historização OPC UA para variáveis configuradas
+        await self._enable_opcua_history()
         
         # Conectar ao RabbitMQ
         try:
@@ -166,9 +177,16 @@ class OPCUAServer:
         if self.rabbitmq_consumer:
             await self.rabbitmq_consumer.close()
             
-        # Fechar historiador
-        if self.historian:
-            await self.historian.close()
+        # Desabilitar historização OPC UA
+        for node in self._historized_nodes:
+            try:
+                await self.server.dehistorize_node_data_change(node)
+            except Exception as e:
+                logger.debug(f"Erro ao desabilitar histórico: {e}")
+                
+        # Fechar history storage OPC UA
+        if self.history_storage:
+            await self.history_storage.stop()
             
         # Parar servidor
         if self.server:
@@ -176,6 +194,53 @@ class OPCUAServer:
             
         logger.info("Servidor OPC UA parado")
         logger.info(f"Estatísticas: {self._stats}")
+        
+    async def _enable_opcua_history(self):
+        """
+        Habilita historização OPC UA para variáveis configuradas.
+        
+        Usa o HistoryManager do asyncua para permitir que clientes OPC UA
+        (como o UA Expert) façam requisições HistoryRead padrão.
+        """
+        # Lista de variáveis que devem ter histórico habilitado
+        historized_variables = [
+            # Elétricas
+            "VoltageA", "VoltageB", "VoltageC",
+            "CurrentA", "CurrentB", "CurrentC",
+            "PowerActive", "PowerReactive", "PowerApparent",
+            "EnergyActive", "EnergyReactive", "EnergyApparent",
+            "PowerFactor", "Frequency",
+            # Temperatura da carcaça
+            "CaseTemperature"
+        ]
+        
+        logger.info("Habilitando historização OPC UA para variáveis...")
+        
+        for var_name in historized_variables:
+            node = self.nodes.get(var_name)
+            if node:
+                try:
+                    # Habilitar historização usando o HistoryManager do asyncua
+                    # Isso configura:
+                    # - Atributo Historizing = True
+                    # - AccessLevel com HistoryRead
+                    # - Subscription para capturar mudanças de valor
+                    await self.server.historize_node_data_change(
+                        node,
+                        period=timedelta(days=7),  # Manter 7 dias de histórico
+                        count=0  # Sem limite de contagem
+                    )
+                    self._historized_nodes.append(node)
+                    
+                    # Registrar mapeamento para a API REST poder buscar por nome
+                    # node.nodeid é um atributo, não um método assíncrono
+                    await self.history_storage.register_variable_mapping(var_name, node.nodeid)
+                    
+                    logger.debug(f"Historização OPC UA habilitada para {var_name}")
+                except Exception as e:
+                    logger.warning(f"Erro ao habilitar historização para {var_name}: {e}")
+                    
+        logger.info(f"Historização OPC UA habilitada para {len(self._historized_nodes)} variáveis")
         
     async def _on_sensor_data(self, sensor_type: str, data: Dict):
         """
@@ -202,9 +267,8 @@ class OPCUAServer:
             alarms = await self.alarm_manager.check_values(values)
             self._stats["alarms_generated"] += len(alarms)
             
-            # Registrar histórico
-            await self.historian.record_batch(values, timestamp)
-            self._stats["history_records"] += len([v for v in values if v in self.historian.historized_variables])
+            # O histórico é gravado automaticamente pelo HistoryManager do asyncua
+            # quando as variáveis são atualizadas (via subscription interna)
             
             self._stats["messages_processed"] += 1
             self._last_values.update(values)
@@ -245,8 +309,9 @@ class OPCUAServer:
         # Gerar evento OPC UA
         await self.alarm_manager.generate_event(alarm)
         
-        # Registrar no histórico
-        await self.historian.record_alarm(alarm.to_dict())
+        # Salvar alarme no banco de dados para persistência
+        if self.history_storage:
+            await self.history_storage.save_alarm(alarm.to_dict())
         
     async def _register_lds_periodic(self):
         """

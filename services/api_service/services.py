@@ -327,6 +327,9 @@ class DataService:
         """
         Retorna histórico de uma variável.
         
+        Busca dados do banco unificado usado pelo servidor OPC UA.
+        Usa a tabela de mapeamento para encontrar a tabela correta.
+        
         Args:
             variable: Nome da variável
             start_time: Início do período
@@ -339,26 +342,38 @@ class DataService:
         end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(hours=24))
         
+        # Remover timezone para compatibilidade com SQLite
+        start_dt = start_time.replace(tzinfo=None) if hasattr(start_time, 'replace') else start_time
+        end_dt = end_time.replace(tzinfo=None) if hasattr(end_time, 'replace') else end_time
+        
+        data = []
+        
         try:
-            cursor = await self._db.execute("""
-                SELECT timestamp, value, quality
-                FROM variable_history
-                WHERE variable_name = ?
-                AND timestamp BETWEEN ? AND ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (variable, start_time.isoformat(), end_time.isoformat(), limit))
+            # Primeiro, tentar buscar usando a tabela de mapeamento
+            cursor = await self._db.execute(
+                "SELECT table_name FROM variable_node_mapping WHERE variable_name = ?",
+                (variable,)
+            )
+            mapping = await cursor.fetchone()
             
-            rows = await cursor.fetchall()
+            if mapping:
+                # Tabela específica encontrada
+                table_name = mapping[0]
+                data = await self._read_history_data(table_name, start_dt, end_dt, limit)
+            else:
+                # Fallback: buscar em todas as tabelas de histórico
+                cursor = await self._db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'history_%'"
+                )
+                tables = await cursor.fetchall()
+                
+                for (table_name,) in tables:
+                    table_data = await self._read_history_data(table_name, start_dt, end_dt, limit)
+                    data.extend(table_data)
             
-            data = [
-                {
-                    "timestamp": row[0],
-                    "value": row[1],
-                    "quality": row[2] or "Good"
-                }
-                for row in rows
-            ]
+            # Ordenar por timestamp
+            data.sort(key=lambda x: x["timestamp"], reverse=True)
+            data = data[:limit]
             
             return {
                 "variable": variable,
@@ -377,6 +392,62 @@ class DataService:
                 "count": 0,
                 "data": []
             }
+    
+    async def _read_history_data(
+        self,
+        table_name: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        limit: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Lê dados históricos de uma tabela específica.
+        
+        Args:
+            table_name: Nome da tabela
+            start_dt: Início do período (sem timezone)
+            end_dt: Fim do período (sem timezone)
+            limit: Número máximo de registros
+            
+        Returns:
+            Lista de pontos históricos
+        """
+        data = []
+        
+        try:
+            query = f'''
+                SELECT SourceTimestamp, Value
+                FROM "{table_name}"
+                WHERE SourceTimestamp BETWEEN ? AND ?
+                ORDER BY SourceTimestamp DESC
+                LIMIT ?
+            '''
+            cursor = await self._db.execute(
+                query, 
+                (start_dt.isoformat(" "), end_dt.isoformat(" "), limit)
+            )
+            rows = await cursor.fetchall()
+            
+            for row in rows:
+                try:
+                    ts = row[0]
+                    if isinstance(ts, str):
+                        ts = datetime.fromisoformat(ts)
+                    
+                    value = float(row[1]) if row[1] else 0.0
+                    
+                    data.append({
+                        "timestamp": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
+                        "value": value,
+                        "quality": "Good"
+                    })
+                except Exception as e:
+                    logger.debug(f"Erro ao processar registro: {e}")
+                    
+        except Exception as e:
+            logger.debug(f"Erro ao consultar tabela {table_name}: {e}")
+        
+        return data
             
     async def get_alarms(
         self,
@@ -402,6 +473,10 @@ class DataService:
         end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(days=7))
         
+        # Remover timezone para compatibilidade com SQLite
+        start_dt = start_time.replace(tzinfo=None) if hasattr(start_time, 'replace') and start_time.tzinfo else start_time
+        end_dt = end_time.replace(tzinfo=None) if hasattr(end_time, 'replace') and end_time.tzinfo else end_time
+        
         try:
             query = """
                 SELECT alarm_id, timestamp, category, severity, message,
@@ -409,7 +484,7 @@ class DataService:
                 FROM alarm_history
                 WHERE timestamp BETWEEN ? AND ?
             """
-            params = [start_time.isoformat(), end_time.isoformat()]
+            params = [start_dt.isoformat(" "), end_dt.isoformat(" ")]
             
             if category:
                 query += " AND category = ?"

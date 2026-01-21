@@ -175,7 +175,7 @@ class NodesetBuilder:
             name: Nome da variável
             initial_value: Valor inicial
             unit: Unidade de engenharia
-            historize: Se True, habilita historização
+            historize: Se True, marca para historização (será habilitada depois)
             
         Returns:
             Node: Referência ao nó da variável criada
@@ -190,9 +190,9 @@ class NodesetBuilder:
         # Tornar variável gravável (para atualizações do RabbitMQ)
         await var.set_writable()
         
-        # Configurar historização se necessário
-        if historize:
-            await var.set_attr_bit(ua.AttributeIds.AccessLevel, ua.AccessLevel.HistoryRead)
+        # Nota: A historização real é habilitada pelo server.py usando
+        # server.historize_node_data_change() após o servidor iniciar.
+        # Isso é necessário porque o HistoryManager precisa criar subscriptions.
             
         # Armazenar referência
         self.nodes[name] = var
