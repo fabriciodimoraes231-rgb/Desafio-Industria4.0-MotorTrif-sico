@@ -419,7 +419,7 @@ class DataService:
                 SELECT SourceTimestamp, Value
                 FROM "{table_name}"
                 WHERE SourceTimestamp BETWEEN ? AND ?
-                ORDER BY SourceTimestamp DESC
+                ORDER BY SourceTimestamp ASC
                 LIMIT ?
             '''
             cursor = await self._db.execute(
