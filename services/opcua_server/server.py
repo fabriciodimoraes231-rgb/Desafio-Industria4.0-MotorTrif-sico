@@ -332,21 +332,36 @@ class OPCUAServer:
         """
         Registra o servidor no LDS (Local Discovery Server).
         
-        Nota: Requer LDS rodando localmente.
+        O LDS permite que clientes OPC UA descubram servidores disponíveis
+        na rede. O registro é feito periodicamente para manter a presença.
+        
+        Nota: Requer LDS rodando. Se não disponível, falha silenciosamente.
         """
-        # Registro no LDS é opcional e pode falhar se LDS não estiver disponível
         try:
             from asyncua import Client
             
-            async with Client(self.settings.lds_url) as client:
-                # Tentar registrar usando o método padrão
-                logger.debug(f"Tentando registrar no LDS: {self.settings.lds_url}")
-                # O registro real requer configuração específica do LDS
-                pass
+            async with Client(self.settings.lds_url, timeout=5) as lds_client:
+                await lds_client.connect()
+                
+                # Configurar informações do servidor para registro
+                server_info = ua.RegisteredServer()
+                server_info.ServerUri = self.server.application_uri if self.server else f"urn:{self.settings.opcua_name}"
+                server_info.ProductUri = "urn:motor50cv:opcua:server"
+                server_info.ServerNames = [ua.LocalizedText("Motor50CV OPC UA Server")]
+                server_info.ServerType = ua.ApplicationType.Server
+                server_info.IsOnline = True
+                
+                # URLs de descoberta
+                discovery_url = f"opc.tcp://{self.settings.opcua_host}:{self.settings.opcua_port}"
+                server_info.DiscoveryUrls = [discovery_url]
+                
+                # Registrar no LDS
+                await lds_client.register_server(server_info)
+                logger.info(f"Servidor registrado no LDS: {self.settings.lds_url}")
                 
         except Exception as e:
-            # LDS pode não estar disponível - isso é aceitável
-            pass
+            # LDS pode não estar disponível - isso é aceitável em ambiente Docker
+            logger.debug(f"LDS não disponível: {e}")
             
     def get_latest_values(self) -> Dict[str, Any]:
         """
