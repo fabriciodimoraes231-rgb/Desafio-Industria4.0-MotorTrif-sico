@@ -282,7 +282,7 @@ Apos executar com `--cov-report=html`, abra `htmlcov/index.html` no navegador.
 
 Acesse http://localhost:3000 com:
 - **Usuario**: admin
-- **Senha**: admin123
+- **Senha**: tpv@2026
 
 ### Dashboard Motor50CV
 
