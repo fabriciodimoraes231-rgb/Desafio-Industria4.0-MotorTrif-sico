@@ -178,7 +178,7 @@ class TestHistoryResponse:
             "end_time": datetime.now(timezone.utc),
             "count": 100,
             "data": [
-                {"timestamp": datetime.now(timezone.utc), "value": 220.5, "quality": "Good"}
+                {"timestamp": datetime.now(timezone.utc).isoformat(), "value": 220.5, "quality": "Good"}
             ]
         }
         

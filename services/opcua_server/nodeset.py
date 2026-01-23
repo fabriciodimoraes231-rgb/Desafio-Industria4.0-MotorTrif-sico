@@ -1,8 +1,6 @@
 """
 Construtor do Nodeset OPC UA.
 
-Este módulo implementa a criação da estrutura de nós do servidor OPC UA
-seguindo a hierarquia especificada para o motor 50CV.
 """
 
 import logging
