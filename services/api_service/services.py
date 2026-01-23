@@ -1,8 +1,5 @@
 """
-Camada de serviço para acesso a dados.
-
-Este módulo implementa os serviços que acessam dados do banco de dados,
-RabbitMQ e servidor OPC UA.
+Serviço de acesso a dados do motor 50CV.
 """
 
 import asyncio
@@ -19,26 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class DataService:
-    """
-    Serviço de acesso a dados do motor.
-    
-    Fornece métodos para consultar estado atual, histórico e alarmes
-    do motor 50CV.
-    
-    Attributes:
-        settings: Configurações do serviço
-        _db: Conexão com banco de dados
-        _rabbitmq_conn: Conexão com RabbitMQ
-        _latest_values: Cache dos últimos valores
-    """
+    """Serviço para consultar estado atual, histórico e alarmes do motor."""
     
     def __init__(self, settings: Optional[Settings] = None):
-        """
-        Inicializa o serviço de dados.
-        
-        Args:
-            settings: Configurações (usa padrão se não fornecido)
-        """
         self.settings = settings or get_settings()
         self._db: Optional[aiosqlite.Connection] = None
         self._rabbitmq_conn: Optional[aio_pika.Connection] = None
@@ -47,15 +27,9 @@ class DataService:
         self._consuming = False
         
     async def initialize(self):
-        """
-        Inicializa conexões com banco de dados e RabbitMQ.
-        """
-        # Conectar ao banco de dados
+        """Inicializa conexões."""
         await self._connect_database()
-        
-        # Conectar ao RabbitMQ para consumir dados em tempo real
         await self._connect_rabbitmq()
-        
         logger.info("DataService inicializado")
         
     async def close(self):
@@ -72,23 +46,16 @@ class DataService:
         
     async def _connect_database(self):
         """Conecta ao banco de dados SQLite."""
-        # Extrair caminho do banco da URL
         db_path = self.settings.database_url.replace("sqlite:///", "")
-        
-        # Criar diretório se necessário
         db_dir = Path(db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
         
         self._db = await aiosqlite.connect(db_path)
-        
-        # Criar tabelas se não existirem
         await self._create_tables()
-        
         logger.info(f"Conectado ao banco: {db_path}")
         
     async def _create_tables(self):
         """Cria tabelas necessárias no banco."""
-        # Tabela de histórico de variáveis
         await self._db.execute("""
             CREATE TABLE IF NOT EXISTS variable_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,12 +141,7 @@ class DataService:
                         logger.error(f"Erro ao processar mensagem: {e}")
                         
     async def _update_cache(self, data: Dict):
-        """
-        Atualiza cache de valores atuais.
-        
-        Args:
-            data: Dados recebidos do RabbitMQ
-        """
+        """Atualiza cache de valores atuais."""
         sensor_type = data.get('_sensor_type', '')
         timestamp = data.get('timestamp', datetime.now(timezone.utc).isoformat())
         
@@ -233,13 +195,7 @@ class DataService:
         return values
         
     async def get_latest(self) -> Dict[str, Any]:
-        """
-        Retorna os últimos valores conhecidos de todas as variáveis.
-        
-        Returns:
-            Dicionário estruturado com todos os dados do motor
-        """
-        # Tentar obter do cache primeiro
+        """Retorna os últimos valores de todas as variáveis."""
         if self._latest_values:
             return self._format_latest_response(self._latest_values)
             
@@ -324,21 +280,7 @@ class DataService:
         end_time: Optional[datetime] = None,
         limit: int = 1000
     ) -> Dict[str, Any]:
-        """
-        Retorna histórico de uma variável.
-        
-        Busca dados do banco unificado usado pelo servidor OPC UA.
-        Usa a tabela de mapeamento para encontrar a tabela correta.
-        
-        Args:
-            variable: Nome da variável
-            start_time: Início do período
-            end_time: Fim do período
-            limit: Máximo de registros
-            
-        Returns:
-            Dicionário com dados históricos
-        """
+        """Retorna histórico de uma variável."""
         end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(hours=24))
         
@@ -371,9 +313,8 @@ class DataService:
                     table_data = await self._read_history_data(table_name, start_dt, end_dt, limit)
                     data.extend(table_data)
             
-            # Ordenar por timestamp
-            data.sort(key=lambda x: x["timestamp"], reverse=True)
-            data = data[:limit]
+            # Ordenar por timestamp ascendente para gráficos
+            data.sort(key=lambda x: x["timestamp"], reverse=False)
             
             return {
                 "variable": variable,
@@ -400,18 +341,7 @@ class DataService:
         end_dt: datetime,
         limit: int
     ) -> List[Dict[str, Any]]:
-        """
-        Lê dados históricos de uma tabela específica.
-        
-        Args:
-            table_name: Nome da tabela
-            start_dt: Início do período (sem timezone)
-            end_dt: Fim do período (sem timezone)
-            limit: Número máximo de registros
-            
-        Returns:
-            Lista de pontos históricos
-        """
+        """Lê dados históricos de uma tabela específica."""
         data = []
         
         try:
@@ -419,7 +349,7 @@ class DataService:
                 SELECT SourceTimestamp, Value
                 FROM "{table_name}"
                 WHERE SourceTimestamp BETWEEN ? AND ?
-                ORDER BY SourceTimestamp ASC
+                ORDER BY SourceTimestamp DESC
                 LIMIT ?
             '''
             cursor = await self._db.execute(
@@ -436,8 +366,11 @@ class DataService:
                     
                     value = float(row[1]) if row[1] else 0.0
                     
+                    # Timestamp ISO8601 com Z para Grafana JSON datasource
+                    ts_iso = ts.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z" if hasattr(ts, 'strftime') else str(ts)
+                    
                     data.append({
-                        "timestamp": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
+                        "timestamp": ts_iso,
                         "value": value,
                         "quality": "Good"
                     })
@@ -457,19 +390,7 @@ class DataService:
         active_only: bool = False,
         limit: int = 100
     ) -> Dict[str, Any]:
-        """
-        Retorna histórico de alarmes.
-        
-        Args:
-            start_time: Início do período
-            end_time: Fim do período
-            category: Filtrar por categoria
-            active_only: Apenas alarmes não reconhecidos
-            limit: Máximo de registros
-            
-        Returns:
-            Dicionário com lista de alarmes
-        """
+        """Retorna histórico de alarmes."""
         end_time = end_time or datetime.now(timezone.utc)
         start_time = start_time or (end_time - timedelta(days=7))
         
@@ -544,15 +465,7 @@ class DataService:
             }
             
     async def acknowledge_alarm(self, alarm_id: str) -> bool:
-        """
-        Reconhece um alarme.
-        
-        Args:
-            alarm_id: ID do alarme
-            
-        Returns:
-            True se reconhecido com sucesso
-        """
+        """Reconhece um alarme."""
         try:
             await self._db.execute("""
                 UPDATE alarm_history SET acknowledged = 1 WHERE alarm_id = ?
@@ -564,16 +477,7 @@ class DataService:
             return False
             
     async def get_statistics(self, variable: str, hours: int = 24) -> Dict[str, Any]:
-        """
-        Calcula estatísticas de uma variável.
-        
-        Args:
-            variable: Nome da variável
-            hours: Período em horas
-            
-        Returns:
-            Estatísticas (min, max, avg, count)
-        """
+        """Calcula estatísticas de uma variável."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         try:
@@ -612,14 +516,7 @@ _data_service: Optional[DataService] = None
 
 
 async def get_data_service() -> DataService:
-    """
-    Retorna instância do serviço de dados.
-    
-    Inicializa na primeira chamada.
-    
-    Returns:
-        DataService: Instância do serviço
-    """
+    """Retorna instância do serviço de dados."""
     global _data_service
     
     if _data_service is None:

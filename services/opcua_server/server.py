@@ -1,11 +1,22 @@
 """
-Servidor OPC UA principal.
+Servidor OPC UA para Motor 50CV.
 
-Este módulo implementa o servidor OPC UA completo com suporte a:
-- Nodeset personalizado para Motor 50CV
-- Histórico de variáveis
-- Alarmes e eventos
-- Registro no LDS (Local Discovery Server)
+Este modulo implementa o servidor OPC UA principal que expoe as
+variaveis do motor trifasico 50CV para clientes OPC UA.
+
+O servidor:
+- Consome dados do RabbitMQ (provenientes do MQTT Ingestor)
+- Atualiza as variaveis OPC UA em tempo real
+- Historiza dados de variaveis selecionadas em SQLite
+- Gera alarmes baseados em regras de limites
+
+Classes:
+    OPCUAServer: Servidor OPC UA principal
+
+Example:
+    >>> server = OPCUAServer()
+    >>> await server.initialize()
+    >>> await server.start()
 """
 
 import asyncio
@@ -29,26 +40,28 @@ class OPCUAServer:
     """
     Servidor OPC UA para monitoramento do Motor 50CV.
     
-    Implementa servidor completo com:
-    - Nodeset hierárquico (Motor50CV/Electrical, Environment, Vibration)
-    - Histórico de variáveis elétricas e temperatura da carcaça
-    - Alarmes e eventos com severidades configuráveis
-    - Registro periódico no LDS
+    Esta classe implementa o servidor OPC UA completo, incluindo:
+    - Criacao da estrutura de nos (nodeset)
     - Consumo de dados do RabbitMQ
+    - Atualizacao de variaveis OPC UA
+    - Historização de dados em SQLite
+    - Geracao de alarmes
     
     Attributes:
-        settings: Configurações do servidor
-        server: Instância do servidor asyncua
-        namespace_idx: Índice do namespace
-        nodes: Dicionário com referências aos nós
+        settings: Configuracoes do servidor
+        server: Instancia do servidor asyncua
+        namespace_idx: Indice do namespace do motor
+        nodes: Dicionario de nos OPC UA
         alarm_manager: Gerenciador de alarmes
-        historian: Historiador de dados
+        history_storage: Storage de historico SQLite
         rabbitmq_consumer: Consumidor RabbitMQ
         
     Example:
-        >>> opcua_server = OPCUAServer()
-        >>> await opcua_server.initialize()
-        >>> await opcua_server.start()
+        >>> server = OPCUAServer()
+        >>> await server.initialize()
+        >>> await server.start()
+        >>> # ... servidor rodando ...
+        >>> await server.stop()
     """
     
     def __init__(self, settings: Optional[Settings] = None):
@@ -56,7 +69,7 @@ class OPCUAServer:
         Inicializa o servidor OPC UA.
         
         Args:
-            settings: Configurações (usa padrão se não fornecido)
+            settings: Configuracoes do servidor (usa padrao se nao fornecido)
         """
         self.settings = settings or get_settings()
         self.server: Optional[Server] = None
@@ -77,35 +90,31 @@ class OPCUAServer:
         
     async def initialize(self):
         """
-        Inicializa o servidor OPC UA e todos os componentes.
+        Inicializa o servidor, nodeset, alarmes e historico.
         
-        Configura servidor, nodeset, alarmes, histórico e consumidor RabbitMQ.
+        Configura todos os componentes necessarios para o funcionamento
+        do servidor OPC UA.
+        
+        Raises:
+            RuntimeError: Se falhar ao inicializar componentes
         """
         logger.info("Inicializando servidor OPC UA...")
         
-        # Criar servidor
         self.server = Server()
         await self.server.init()
         
-        # Configurar endpoint
         self.server.set_endpoint(self.settings.opcua_endpoint)
         self.server.set_server_name(self.settings.opcua_name)
         
-        # Registrar namespace
         self.namespace_idx = await self.server.register_namespace(
             self.settings.opcua_namespace
         )
         
-        # Configurar política de segurança (básica para desenvolvimento)
         self.server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
         
-        # Construir nodeset
         nodeset_builder = NodesetBuilder(self.server, self.namespace_idx)
         self.nodes = await nodeset_builder.build()
         
-        # Configurar HistoryStorage unificado para OPC UA e API REST
-        # - Clientes OPC UA (UA Expert) acessam via HistoryRead
-        # - API REST (Grafana) acessa via métodos get_history_for_api
         self.history_storage = HistoryStorageSQLite(
             db_path=self.settings.database_path,
             max_history_data_response_size=10000
@@ -113,12 +122,10 @@ class OPCUAServer:
         await self.history_storage.init()
         self.server.iserver.history_manager.set_storage(self.history_storage)
         
-        # Inicializar gerenciador de alarmes
         self.alarm_manager = AlarmManager(self.server, self.nodes, self.settings)
         await self.alarm_manager.initialize()
         self.alarm_manager.set_alarm_callback(self._on_alarm)
         
-        # Inicializar consumidor RabbitMQ
         self.rabbitmq_consumer = RabbitMQConsumer(self.settings)
         self.rabbitmq_consumer.set_message_callback(self._on_sensor_data)
         
@@ -126,46 +133,40 @@ class OPCUAServer:
         
     async def start(self):
         """
-        Inicia o servidor OPC UA.
+        Inicia o servidor e comeca a consumir mensagens do RabbitMQ.
         
-        Inicia o servidor, conecta ao RabbitMQ e começa a consumir mensagens.
+        Apos o inicio, o servidor estara disponivel para conexoes
+        de clientes OPC UA.
         """
         if self._running:
-            logger.warning("Servidor já está rodando")
             return
             
         logger.info("Iniciando servidor OPC UA...")
         
-        # Iniciar servidor
         await self.server.start()
         self._running = True
         
-        logger.info(f"Servidor OPC UA rodando em: {self.settings.opcua_endpoint}")
+        logger.info(f"Servidor rodando em: {self.settings.opcua_endpoint}")
         
-        # Habilitar historização OPC UA para variáveis configuradas
         await self._enable_opcua_history()
         
-        # Conectar ao RabbitMQ
         try:
             await self.rabbitmq_consumer.connect()
             await self.rabbitmq_consumer.start_consuming()
         except Exception as e:
             logger.error(f"Erro ao conectar ao RabbitMQ: {e}")
-            # Continuar mesmo sem RabbitMQ (modo standalone)
             
-        # Iniciar registro periódico no LDS
         self._lds_task = asyncio.create_task(self._register_lds_periodic())
         
     async def stop(self):
         """
-        Para o servidor OPC UA.
+        Para o servidor e fecha conexoes.
         
-        Fecha todas as conexões e libera recursos.
+        Realiza shutdown graceful de todos os componentes.
         """
         logger.info("Parando servidor OPC UA...")
         self._running = False
         
-        # Parar registro no LDS
         if self._lds_task:
             self._lds_task.cancel()
             try:
@@ -173,119 +174,76 @@ class OPCUAServer:
             except asyncio.CancelledError:
                 pass
                 
-        # Fechar RabbitMQ
         if self.rabbitmq_consumer:
             await self.rabbitmq_consumer.close()
             
-        # Desabilitar historização OPC UA
         for node in self._historized_nodes:
             try:
                 await self.server.dehistorize_node_data_change(node)
-            except Exception as e:
-                logger.debug(f"Erro ao desabilitar histórico: {e}")
+            except Exception:
+                pass
                 
-        # Fechar history storage OPC UA
         if self.history_storage:
             await self.history_storage.stop()
             
-        # Parar servidor
         if self.server:
             await self.server.stop()
             
         logger.info("Servidor OPC UA parado")
-        logger.info(f"Estatísticas: {self._stats}")
+        logger.info(f"Estatisticas: {self._stats}")
         
     async def _enable_opcua_history(self):
         """
-        Habilita historização OPC UA para variáveis configuradas.
+        Habilita historizacao para variaveis eletricas e temperatura.
         
-        Usa o HistoryManager do asyncua para permitir que clientes OPC UA
-        (como o UA Expert) façam requisições HistoryRead padrão.
+        Configura as variaveis que terao seus valores armazenados
+        no historico para consulta posterior.
         """
-        # Lista de variáveis que devem ter histórico habilitado
         historized_variables = [
-            # Elétricas
             "VoltageA", "VoltageB", "VoltageC",
             "CurrentA", "CurrentB", "CurrentC",
             "PowerActive", "PowerReactive", "PowerApparent",
             "EnergyActive", "EnergyReactive", "EnergyApparent",
             "PowerFactor", "Frequency",
-            # Temperatura da carcaça
             "CaseTemperature"
         ]
-        
-        logger.info("Habilitando historização OPC UA para variáveis...")
         
         for var_name in historized_variables:
             node = self.nodes.get(var_name)
             if node:
                 try:
-                    # Habilitar historização usando o HistoryManager do asyncua
-                    # Isso configura:
-                    # - Atributo Historizing = True
-                    # - AccessLevel com HistoryRead
-                    # - Subscription para capturar mudanças de valor
                     await self.server.historize_node_data_change(
                         node,
-                        period=timedelta(days=7),  # Manter 7 dias de histórico
-                        count=0  # Sem limite de contagem
+                        period=timedelta(days=7),
+                        count=0
                     )
                     self._historized_nodes.append(node)
-                    
-                    # Registrar mapeamento para a API REST poder buscar por nome
-                    # node.nodeid é um atributo, não um método assíncrono
                     await self.history_storage.register_variable_mapping(var_name, node.nodeid)
-                    
-                    logger.debug(f"Historização OPC UA habilitada para {var_name}")
                 except Exception as e:
-                    logger.warning(f"Erro ao habilitar historização para {var_name}: {e}")
+                    logger.warning(f"Erro ao habilitar histórico para {var_name}: {e}")
                     
-        logger.info(f"Historização OPC UA habilitada para {len(self._historized_nodes)} variáveis")
+        logger.info(f"Historização habilitada para {len(self._historized_nodes)} variáveis")
         
     async def _on_sensor_data(self, sensor_type: str, data: Dict):
-        """
-        Callback para dados recebidos do RabbitMQ.
-        
-        Atualiza variáveis OPC UA, verifica alarmes e registra histórico.
-        
-        Args:
-            sensor_type: Tipo do sensor (electrical, environment, vibration)
-            data: Dados do sensor
-        """
+        """Processa dados recebidos do RabbitMQ."""
         try:
-            # Extrair valores das variáveis
             values = extract_variable_values(sensor_type, data)
             
-            # Extrair timestamp
             timestamp_str = data.get("timestamp")
             timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")) if timestamp_str else datetime.now(timezone.utc)
             
-            # Atualizar variáveis OPC UA
             await self._update_variables(values, timestamp)
             
-            # Verificar alarmes
             alarms = await self.alarm_manager.check_values(values)
             self._stats["alarms_generated"] += len(alarms)
-            
-            # O histórico é gravado automaticamente pelo HistoryManager do asyncua
-            # quando as variáveis são atualizadas (via subscription interna)
-            
             self._stats["messages_processed"] += 1
             self._last_values.update(values)
-            
-            logger.debug(f"Dados processados: {sensor_type} ({len(values)} variáveis)")
             
         except Exception as e:
             logger.error(f"Erro ao processar dados do sensor {sensor_type}: {e}")
             
     async def _update_variables(self, values: Dict[str, float], timestamp: datetime):
-        """
-        Atualiza valores das variáveis OPC UA.
-        
-        Args:
-            values: Dicionário com nome e valor das variáveis
-            timestamp: Timestamp dos dados
-        """
+        """Atualiza valores das variáveis OPC UA."""
         for name, value in values.items():
             node = self.nodes.get(name)
             if node:
@@ -297,79 +255,47 @@ class OPCUAServer:
                     )
                     await node.write_value(dv)
                 except Exception as e:
-                    logger.error(f"Erro ao atualizar variável {name}: {e}")
+                    logger.error(f"Erro ao atualizar {name}: {e}")
                     
     async def _on_alarm(self, alarm):
-        """
-        Callback para novos alarmes.
-        
-        Args:
-            alarm: Evento de alarme gerado
-        """
-        # Gerar evento OPC UA
+        """Processa e persiste alarme gerado."""
         await self.alarm_manager.generate_event(alarm)
-        
-        # Salvar alarme no banco de dados para persistência
         if self.history_storage:
             await self.history_storage.save_alarm(alarm.to_dict())
         
     async def _register_lds_periodic(self):
-        """
-        Task para registro periódico no LDS.
-        
-        Tenta registrar o servidor no Local Discovery Server
-        conforme intervalo configurado.
-        """
+        """Registra periodicamente no LDS."""
         while self._running:
             try:
                 await self._register_lds()
-            except Exception as e:
-                logger.debug(f"Registro no LDS falhou (pode não estar disponível): {e}")
-                
+            except Exception:
+                pass
             await asyncio.sleep(self.settings.lds_register_interval)
             
     async def _register_lds(self):
-        """
-        Registra o servidor no LDS (Local Discovery Server).
-        
-        O LDS permite que clientes OPC UA descubram servidores disponíveis
-        na rede. O registro é feito periodicamente para manter a presença.
-        
-        Nota: Requer LDS rodando. Se não disponível, falha silenciosamente.
-        """
+        """Registra servidor no Local Discovery Server."""
         try:
             from asyncua import Client
             
             async with Client(self.settings.lds_url, timeout=5) as lds_client:
                 await lds_client.connect()
                 
-                # Configurar informações do servidor para registro
                 server_info = ua.RegisteredServer()
                 server_info.ServerUri = self.server.application_uri if self.server else f"urn:{self.settings.opcua_name}"
                 server_info.ProductUri = "urn:motor50cv:opcua:server"
                 server_info.ServerNames = [ua.LocalizedText("Motor50CV OPC UA Server")]
                 server_info.ServerType = ua.ApplicationType.Server
                 server_info.IsOnline = True
+                server_info.DiscoveryUrls = [f"opc.tcp://{self.settings.opcua_host}:{self.settings.opcua_port}"]
                 
-                # URLs de descoberta
-                discovery_url = f"opc.tcp://{self.settings.opcua_host}:{self.settings.opcua_port}"
-                server_info.DiscoveryUrls = [discovery_url]
-                
-                # Registrar no LDS
                 await lds_client.register_server(server_info)
-                logger.info(f"Servidor registrado no LDS: {self.settings.lds_url}")
+                logger.info(f"Registrado no LDS: {self.settings.lds_url}")
                 
-        except Exception as e:
-            # LDS pode não estar disponível - isso é aceitável em ambiente Docker
-            logger.debug(f"LDS não disponível: {e}")
+        except Exception:
+            pass
             
     def get_latest_values(self) -> Dict[str, Any]:
-        """
-        Retorna os últimos valores conhecidos de todas as variáveis.
-        
-        Returns:
-            Dicionário com variáveis e valores
-        """
+        """Retorna últimos valores das variáveis."""
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "variables": self._last_values.copy(),
@@ -377,49 +303,27 @@ class OPCUAServer:
         }
         
     def get_stats(self) -> Dict[str, int]:
-        """
-        Retorna estatísticas do servidor.
-        
-        Returns:
-            Dicionário com contadores de estatísticas
-        """
+        """Retorna estatísticas do servidor."""
         return self._stats.copy()
         
     async def read_variable(self, name: str) -> Optional[float]:
-        """
-        Lê o valor atual de uma variável.
-        
-        Args:
-            name: Nome da variável
-            
-        Returns:
-            Valor atual ou None se não encontrada
-        """
+        """Lê valor atual de uma variável."""
         node = self.nodes.get(name)
         if node:
             try:
                 value = await node.read_value()
                 return float(value)
-            except Exception as e:
-                logger.error(f"Erro ao ler variável {name}: {e}")
+            except Exception:
+                pass
         return None
         
     async def write_variable(self, name: str, value: float) -> bool:
-        """
-        Escreve um valor em uma variável.
-        
-        Args:
-            name: Nome da variável
-            value: Valor a escrever
-            
-        Returns:
-            True se escrita com sucesso
-        """
+        """Escreve valor em uma variável."""
         node = self.nodes.get(name)
         if node:
             try:
                 await node.write_value(float(value))
                 return True
-            except Exception as e:
-                logger.error(f"Erro ao escrever variável {name}: {e}")
+            except Exception:
+                pass
         return False

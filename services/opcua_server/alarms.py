@@ -1,8 +1,21 @@
 """
 Gerenciador de Alarmes e Eventos OPC UA.
 
-Este módulo implementa a lógica de alarmes e eventos do servidor OPC UA,
-monitorando os valores das variáveis e gerando alertas conforme as regras.
+Este modulo implementa o sistema de alarmes do servidor OPC UA,
+responsavel por:
+- Definir regras de alarme baseadas em limites de variaveis
+- Avaliar condicoes de alarme a cada nova leitura
+- Gerar eventos OPC UA quando alarmes sao ativados
+- Manter historico de alarmes
+
+Classes:
+    Severity: Enum com niveis de severidade
+    AlarmEvent: Dataclass representando um evento de alarme
+    AlarmRule: Regra de alarme para uma variavel
+    AlarmManager: Gerenciador principal de alarmes
+
+Constants:
+    Limiares de tensao, corrente e temperatura conforme especificacao
 """
 
 import logging
@@ -20,14 +33,17 @@ logger = logging.getLogger(__name__)
 
 class Severity(IntEnum):
     """
-    Níveis de severidade para alarmes OPC UA.
+    Niveis de severidade para alarmes OPC UA.
     
-    Valores conforme especificação:
-    - INFORMATIVE (100): Eventos de status, heartbeat
-    - LOW (250): Vibração leve ou pequenas variações
-    - MEDIUM (500): Temperatura levemente acima do esperado
-    - HIGH (700): Sobrecorrente ou sobretensão moderada
-    - CRITICAL (900): Temperatura da carcaça acima de 60°C
+    Segue a escala OPC UA de 0-1000, onde valores maiores
+    indicam maior severidade.
+    
+    Attributes:
+        INFORMATIVE: Informativo (100)
+        LOW: Baixa severidade (250)
+        MEDIUM: Media severidade (500)
+        HIGH: Alta severidade (700)
+        CRITICAL: Critico (900)
     """
     INFORMATIVE = 100
     LOW = 250
@@ -41,14 +57,17 @@ class AlarmEvent:
     """
     Representa um evento de alarme.
     
+    Armazena todas as informacoes de um alarme gerado pelo sistema.
+    
     Attributes:
-        timestamp: Data/hora do evento
-        category: Categoria do alarme (Electrical, Environment, Vibration)
-        severity: Nível de severidade
+        timestamp: Data/hora da ocorrencia
+        category: Categoria (Electrical, Environment, Vibration)
+        severity: Nivel de severidade
         message: Mensagem descritiva
-        source_name: Nome da variável fonte
+        source_name: Nome da variavel que gerou o alarme
         value: Valor que disparou o alarme
-        acknowledged: Se o alarme foi reconhecido
+        acknowledged: Se foi reconhecido pelo operador
+        id: Identificador unico
     """
     timestamp: datetime
     category: str
@@ -60,16 +79,16 @@ class AlarmEvent:
     id: Optional[str] = None
     
     def __post_init__(self):
-        """Gera ID único se não fornecido."""
+        """Gera ID unico se nao fornecido."""
         if self.id is None:
             self.id = f"{self.timestamp.isoformat()}_{self.source_name}"
             
     def to_dict(self) -> Dict[str, Any]:
         """
-        Converte para dicionário.
+        Converte o alarme para dicionario.
         
         Returns:
-            Dicionário com dados do alarme
+            Dicionario com todos os campos do alarme
         """
         return {
             "id": self.id,
@@ -87,15 +106,28 @@ class AlarmEvent:
 @dataclass
 class AlarmRule:
     """
-    Regra de alarme para monitoramento.
+    Regra de alarme para monitoramento de variaveis.
+    
+    Define as condicoes e parametros para geracao de um tipo
+    especifico de alarme.
     
     Attributes:
-        name: Nome da regra
-        variable_name: Nome da variável a monitorar
+        name: Nome identificador da regra
+        variable_name: Nome da variavel monitorada
         category: Categoria do alarme
-        severity: Severidade quando disparado
-        condition: Função que avalia se o alarme deve disparar
+        severity: Severidade quando ativado
         message_template: Template da mensagem (usa {value})
+        condition: Funcao que avalia se o alarme deve ser ativado
+        
+    Example:
+        >>> rule = AlarmRule(
+        ...     name="Overvoltage_A",
+        ...     variable_name="VoltageA",
+        ...     category="Electrical",
+        ...     severity=Severity.HIGH,
+        ...     message_template="Overvoltage on phase A: {value:.1f}V",
+        ...     condition=lambda v: v > 242
+        ... )
     """
     name: str
     variable_name: str
@@ -106,19 +138,19 @@ class AlarmRule:
     
     def evaluate(self, value: float) -> bool:
         """
-        Avalia se a condição de alarme foi atingida.
+        Avalia se a condicao de alarme foi atingida.
         
         Args:
-            value: Valor atual da variável
+            value: Valor atual da variavel
             
         Returns:
-            True se o alarme deve disparar
+            True se a condicao de alarme foi atingida
         """
         return self.condition(value)
         
     def get_message(self, value: float) -> str:
         """
-        Gera mensagem do alarme.
+        Gera mensagem do alarme com o valor atual.
         
         Args:
             value: Valor que disparou o alarme
@@ -133,20 +165,21 @@ class AlarmManager:
     """
     Gerenciador de alarmes e eventos OPC UA.
     
-    Monitora variáveis, gera alarmes conforme regras definidas
-    e mantém histórico de eventos.
+    Responsavel por avaliar regras de alarme, gerar eventos e
+    manter o historico de alarmes do sistema.
     
     Attributes:
-        server: Servidor OPC UA
-        settings: Configurações
+        server: Instancia do servidor OPC UA
+        nodes: Dicionario de nos OPC UA
+        settings: Configuracoes do sistema
         rules: Lista de regras de alarme
-        active_alarms: Alarmes ativos no momento
-        alarm_history: Histórico de alarmes
+        active_alarms: Alarmes atualmente ativos
+        alarm_history: Historico de alarmes
         
     Example:
-        >>> manager = AlarmManager(server, nodes)
+        >>> manager = AlarmManager(server, nodes, settings)
         >>> await manager.initialize()
-        >>> alarms = await manager.check_values({"VoltageA": 250.0})
+        >>> manager.set_alarm_callback(on_alarm_handler)
     """
     
     def __init__(
@@ -159,9 +192,9 @@ class AlarmManager:
         Inicializa o gerenciador de alarmes.
         
         Args:
-            server: Instância do servidor OPC UA
-            nodes: Dicionário com nós do servidor
-            settings: Configurações (usa padrão se não fornecido)
+            server: Instancia do servidor OPC UA
+            nodes: Dicionario de nos OPC UA
+            settings: Configuracoes (usa padrao se nao fornecido)
         """
         self.server = server
         self.nodes = nodes
@@ -171,12 +204,17 @@ class AlarmManager:
         self.alarm_history: List[AlarmEvent] = []
         self._event_type: Optional[Node] = None
         self._on_alarm_callback: Optional[callable] = None
-        
-        # Criar regras de alarme
         self._create_rules()
         
     def _create_rules(self):
-        """Cria as regras de alarme conforme especificação."""
+        """
+        Cria as regras de alarme conforme especificacao.
+        
+        Define regras para:
+        - Sobretensao e subtensao nas 3 fases
+        - Sobrecorrente nas 3 fases
+        - Temperatura critica da carcaca
+        """
         nominal_voltage = self.settings.nominal_voltage
         nominal_current = self.settings.nominal_current
         voltage_deviation = self.settings.voltage_deviation_percent / 100
@@ -236,41 +274,21 @@ class AlarmManager:
         logger.info(f"{len(self.rules)} regras de alarme configuradas")
         
     async def initialize(self):
-        """
-        Inicializa o sistema de alarmes no servidor OPC UA.
-        
-        Configura o tipo de evento para alarmes.
-        """
-        # Obter tipo de evento base
+        """Inicializa o sistema de alarmes no servidor OPC UA."""
         base_event = self.server.nodes.base_event_type
         
-        # Criar tipo de evento personalizado para alarmes do motor
         self._event_type = await self.server.nodes.objects.add_object_type(
-            2,  # namespace index
+            2,
             "Motor50CVAlarmType"
         )
-        
         logger.info("Sistema de alarmes inicializado")
         
     def set_alarm_callback(self, callback: callable):
-        """
-        Define callback para notificação de alarmes.
-        
-        Args:
-            callback: Função assíncrona chamada quando alarme é gerado
-        """
+        """Define callback para notificação de alarmes."""
         self._on_alarm_callback = callback
         
     async def check_values(self, values: Dict[str, float]) -> List[AlarmEvent]:
-        """
-        Verifica valores e gera alarmes se necessário.
-        
-        Args:
-            values: Dicionário com nome da variável e valor atual
-            
-        Returns:
-            Lista de alarmes gerados
-        """
+        """Verifica valores e gera alarmes se necessário."""
         new_alarms = []
         
         for rule in self.rules:
@@ -311,12 +329,7 @@ class AlarmManager:
         return new_alarms
         
     async def generate_event(self, alarm: AlarmEvent):
-        """
-        Gera um evento OPC UA para o alarme.
-        
-        Args:
-            alarm: Evento de alarme a ser publicado
-        """
+        """Gera um evento OPC UA para o alarme."""
         try:
             # Criar evento
             event = await self.server.get_event_generator(
@@ -337,12 +350,7 @@ class AlarmManager:
             logger.error(f"Erro ao gerar evento OPC UA: {e}")
             
     def get_active_alarms(self) -> List[Dict]:
-        """
-        Retorna lista de alarmes ativos.
-        
-        Returns:
-            Lista de dicionários com dados dos alarmes ativos
-        """
+        """Retorna lista de alarmes ativos."""
         return [alarm.to_dict() for alarm in self.active_alarms.values()]
         
     def get_alarm_history(
@@ -351,17 +359,7 @@ class AlarmManager:
         category: Optional[str] = None,
         severity: Optional[Severity] = None
     ) -> List[Dict]:
-        """
-        Retorna histórico de alarmes com filtros opcionais.
-        
-        Args:
-            limit: Número máximo de registros
-            category: Filtrar por categoria
-            severity: Filtrar por severidade mínima
-            
-        Returns:
-            Lista de dicionários com dados dos alarmes
-        """
+        """Retorna histórico de alarmes com filtros opcionais."""
         history = self.alarm_history.copy()
         
         # Aplicar filtros
@@ -377,15 +375,7 @@ class AlarmManager:
         return [alarm.to_dict() for alarm in history[:limit]]
         
     def acknowledge_alarm(self, alarm_id: str) -> bool:
-        """
-        Reconhece um alarme ativo.
-        
-        Args:
-            alarm_id: ID do alarme a reconhecer
-            
-        Returns:
-            True se reconhecido com sucesso
-        """
+        """Reconhece um alarme ativo."""
         for name, alarm in self.active_alarms.items():
             if alarm.id == alarm_id:
                 alarm.acknowledged = True

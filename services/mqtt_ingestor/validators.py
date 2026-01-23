@@ -1,9 +1,26 @@
 """
 Validadores de dados dos sensores.
 
-Este módulo contém funções para validar os dados recebidos dos sensores
-do motor trifásico, garantindo integridade e formato correto antes
-de enviar para o RabbitMQ.
+Este modulo define os modelos Pydantic para validacao dos dados
+recebidos dos sensores do motor trifasico via MQTT.
+
+Os validadores garantem que os dados estejam dentro dos limites
+fisicamente plaussiveis antes de serem processados pelo sistema.
+
+Classes:
+    VoltageData: Validador de tensao trifasica (0-500V)
+    CurrentData: Validador de corrente trifasica (0-200A)
+    PowerData: Validador de potencia
+    EnergyData: Validador de energia acumulada
+    ElectricalReading: Leitura completa do sensor eletrico
+    EnvironmentReading: Leitura do sensor ambiental
+    VibrationReading: Leitura do sensor de vibracao
+
+Functions:
+    validate_electrical: Valida dados do sensor eletrico
+    validate_environment: Valida dados do sensor ambiental
+    validate_vibration: Valida dados do sensor de vibracao
+    get_validator_for_topic: Retorna o validador apropriado para um topico
 """
 
 from typing import Any, Optional
@@ -15,39 +32,80 @@ logger = logging.getLogger(__name__)
 
 
 class VoltageData(BaseModel):
-    """Modelo para dados de tensão trifásica."""
-    a: float = Field(..., ge=0, le=500, description="Tensão fase A (V)")
-    b: float = Field(..., ge=0, le=500, description="Tensão fase B (V)")
-    c: float = Field(..., ge=0, le=500, description="Tensão fase C (V)")
+    """
+    Validador de tensao trifasica.
+    
+    Valida que as tensoes estejam entre 0 e 500 Volts.
+    
+    Attributes:
+        a: Tensao da fase A (0-500V)
+        b: Tensao da fase B (0-500V)
+        c: Tensao da fase C (0-500V)
+    """
+    a: float = Field(..., ge=0, le=500)
+    b: float = Field(..., ge=0, le=500)
+    c: float = Field(..., ge=0, le=500)
 
 
 class CurrentData(BaseModel):
-    """Modelo para dados de corrente trifásica."""
-    a: float = Field(..., ge=0, le=200, description="Corrente fase A (A)")
-    b: float = Field(..., ge=0, le=200, description="Corrente fase B (A)")
-    c: float = Field(..., ge=0, le=200, description="Corrente fase C (A)")
+    """
+    Validador de corrente trifasica.
+    
+    Valida que as correntes estejam entre 0 e 200 Amperes.
+    
+    Attributes:
+        a: Corrente da fase A (0-200A)
+        b: Corrente da fase B (0-200A)
+        c: Corrente da fase C (0-200A)
+    """
+    a: float = Field(..., ge=0, le=200)
+    b: float = Field(..., ge=0, le=200)
+    c: float = Field(..., ge=0, le=200)
 
 
 class PowerData(BaseModel):
-    """Modelo para dados de potência."""
-    active: float = Field(..., ge=0, description="Potência ativa (W)")
-    reactive: float = Field(..., description="Potência reativa (VAr) - pode ser negativa em cargas capacitivas")
-    apparent: float = Field(..., ge=0, description="Potência aparente (VA)")
+    """
+    Validador de dados de potencia.
+    
+    Attributes:
+        active: Potencia ativa em Watts (>= 0)
+        reactive: Potencia reativa em VAr (pode ser negativa)
+        apparent: Potencia aparente em VA (>= 0)
+    """
+    active: float = Field(..., ge=0)
+    reactive: float
+    apparent: float = Field(..., ge=0)
 
 
 class EnergyData(BaseModel):
-    """Modelo para dados de energia."""
-    active: float = Field(..., ge=0, description="Energia ativa (Wh)")
-    reactive: float = Field(..., ge=0, description="Energia reativa (VArh)")
-    apparent: float = Field(..., ge=0, description="Energia aparente (VAh)")
+    """
+    Validador de dados de energia acumulada.
+    
+    Attributes:
+        active: Energia ativa em Wh (>= 0)
+        reactive: Energia reativa em VArh (>= 0)
+        apparent: Energia aparente em VAh (>= 0)
+    """
+    active: float = Field(..., ge=0)
+    reactive: float = Field(..., ge=0)
+    apparent: float = Field(..., ge=0)
 
 
 class ElectricalReading(BaseModel):
     """
-    Modelo para leitura do sensor elétrico.
+    Leitura completa do sensor eletrico.
     
-    Contém todas as variáveis elétricas do motor trifásico:
-    tensão, corrente, potência, energia, fator de potência e frequência.
+    Modelo para validacao de uma leitura completa do sensor
+    de parametros eletricos do motor.
+    
+    Attributes:
+        timestamp: Data/hora da leitura
+        voltage: Tensoes trifasicas
+        current: Correntes trifasicas
+        power: Potencias (ativa, reativa, aparente)
+        energy: Energias acumuladas
+        powerFactor: Fator de potencia (0-1)
+        frequency: Frequencia em Hz (0-100)
     """
     timestamp: datetime
     voltage: VoltageData
@@ -58,65 +116,60 @@ class ElectricalReading(BaseModel):
     frequency: float = Field(..., ge=0, le=100)
     
     class Config:
-        """Configuração do modelo."""
         populate_by_name = True
 
 
 class EnvironmentReading(BaseModel):
     """
-    Modelo para leitura do sensor ambiental.
+    Leitura do sensor ambiental.
     
-    Contém temperatura ambiente, umidade e temperatura da carcaça do motor.
+    Modelo para validacao de dados de temperatura e umidade.
+    
+    Attributes:
+        timestamp: Data/hora da leitura
+        temperature: Temperatura ambiente (-40 a 100C)
+        humidity: Umidade relativa (0-100%)
+        caseTemperature: Temperatura da carcaca (-40 a 150C)
     """
     timestamp: datetime
-    temperature: float = Field(..., ge=-40, le=100, description="Temperatura ambiente (°C)")
-    humidity: float = Field(..., ge=0, le=100, description="Umidade relativa (%)")
-    caseTemperature: float = Field(..., ge=-40, le=150, alias="caseTemperature", description="Temperatura da carcaça (°C)")
+    temperature: float = Field(..., ge=-40, le=100)
+    humidity: float = Field(..., ge=0, le=100)
+    caseTemperature: float = Field(..., ge=-40, le=150, alias="caseTemperature")
     
     class Config:
-        """Configuração do modelo."""
         populate_by_name = True
 
 
 class VibrationReading(BaseModel):
     """
-    Modelo para leitura do sensor de vibração.
+    Leitura do sensor de vibracao.
     
-    Contém medições de vibração axial e radial do motor.
+    Modelo para validacao de dados de vibracao do motor.
+    
+    Attributes:
+        timestamp: Data/hora da leitura
+        axial: Vibracao no eixo axial (0-100 mm/s)
+        radial: Vibracao no eixo radial (0-100 mm/s)
     """
     timestamp: datetime
-    axial: float = Field(..., ge=0, le=100, description="Vibração axial (mm/s)")
-    radial: float = Field(..., ge=0, le=100, description="Vibração radial (mm/s)")
+    axial: float = Field(..., ge=0, le=100)
+    radial: float = Field(..., ge=0, le=100)
 
 
 def validate_electrical(data: dict[str, Any]) -> Optional[ElectricalReading]:
     """
-    Valida dados do sensor elétrico.
+    Valida dados do sensor eletrico.
     
     Args:
-        data: Dicionário com os dados recebidos do sensor elétrico
+        data: Dicionario com os dados brutos do sensor
         
     Returns:
-        ElectricalReading se válido, None caso contrário
-        
-    Example:
-        >>> data = {
-        ...     "timestamp": "2025-08-08T12:00:00Z",
-        ...     "voltage": {"a": 220.0, "b": 221.1, "c": 219.5},
-        ...     "current": {"a": 10.5, "b": 10.4, "c": 10.6},
-        ...     "power": {"active": 4500, "reactive": 500, "apparent": 4600},
-        ...     "energy": {"active": 10000, "reactive": 1200, "apparent": 10200},
-        ...     "powerFactor": 0.95,
-        ...     "frequency": 60.0
-        ... }
-        >>> result = validate_electrical(data)
-        >>> result is not None
-        True
+        ElectricalReading se valido, None caso contrario
     """
     try:
         return ElectricalReading(**data)
     except Exception as e:
-        logger.error(f"Erro ao validar dados elétricos: {e}")
+        logger.error(f"Erro ao validar dados eletricos: {e}")
         logger.debug(f"Dados recebidos: {data}")
         return None
 
@@ -126,21 +179,10 @@ def validate_environment(data: dict[str, Any]) -> Optional[EnvironmentReading]:
     Valida dados do sensor ambiental.
     
     Args:
-        data: Dicionário com os dados recebidos do sensor ambiental
+        data: Dicionario com os dados brutos do sensor
         
     Returns:
-        EnvironmentReading se válido, None caso contrário
-        
-    Example:
-        >>> data = {
-        ...     "timestamp": "2025-08-08T12:00:00Z",
-        ...     "temperature": 34.5,
-        ...     "humidity": 55.2,
-        ...     "caseTemperature": 62.0
-        ... }
-        >>> result = validate_environment(data)
-        >>> result is not None
-        True
+        EnvironmentReading se valido, None caso contrario
     """
     try:
         return EnvironmentReading(**data)
@@ -152,44 +194,40 @@ def validate_environment(data: dict[str, Any]) -> Optional[EnvironmentReading]:
 
 def validate_vibration(data: dict[str, Any]) -> Optional[VibrationReading]:
     """
-    Valida dados do sensor de vibração.
+    Valida dados do sensor de vibracao.
     
     Args:
-        data: Dicionário com os dados recebidos do sensor de vibração
+        data: Dicionario com os dados brutos do sensor
         
     Returns:
-        VibrationReading se válido, None caso contrário
-        
-    Example:
-        >>> data = {
-        ...     "timestamp": "2025-08-08T12:00:00Z",
-        ...     "axial": 0.12,
-        ...     "radial": 0.15
-        ... }
-        >>> result = validate_vibration(data)
-        >>> result is not None
-        True
+        VibrationReading se valido, None caso contrario
     """
     try:
         return VibrationReading(**data)
     except Exception as e:
-        logger.error(f"Erro ao validar dados de vibração: {e}")
+        logger.error(f"Erro ao validar dados de vibracao: {e}")
         logger.debug(f"Dados recebidos: {data}")
         return None
 
 
 def get_validator_for_topic(topic: str):
     """
-    Retorna o validador apropriado para um tópico MQTT.
+    Retorna o validador apropriado para um topico MQTT.
+    
+    Mapeia topicos MQTT para suas funcoes de validacao correspondentes.
     
     Args:
-        topic: Nome do tópico MQTT
+        topic: Nome do topico MQTT
         
     Returns:
-        Função validadora correspondente ao tópico
+        Funcao de validacao para o topico
         
     Raises:
-        ValueError: Se o tópico não for reconhecido
+        ValueError: Se o topico nao for reconhecido
+        
+    Example:
+        >>> validator = get_validator_for_topic("scgdi/motor/electrical")
+        >>> reading = validator(data)
     """
     validators = {
         "scgdi/motor/electrical": validate_electrical,
@@ -198,6 +236,6 @@ def get_validator_for_topic(topic: str):
     }
     
     if topic not in validators:
-        raise ValueError(f"Tópico desconhecido: {topic}")
+        raise ValueError(f"Topico desconhecido: {topic}")
     
     return validators[topic]

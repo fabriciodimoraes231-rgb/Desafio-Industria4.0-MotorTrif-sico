@@ -1,8 +1,29 @@
 """
-Schemas Pydantic para a API.
+Schemas Pydantic para a API REST.
 
-Este módulo define os modelos de dados para requisições
-e respostas da API REST.
+Este modulo define todos os modelos de dados utilizados pela API REST
+do Motor 50CV. Os schemas sao utilizados para validacao de entrada,
+serializacao de saida e geracao automatica de documentacao OpenAPI.
+
+Classes:
+    VoltageResponse: Modelo de tensao trifasica
+    CurrentResponse: Modelo de corrente trifasica
+    PowerResponse: Modelo de potencia (ativa, reativa, aparente)
+    EnergyResponse: Modelo de energia acumulada
+    ElectricalResponse: Dados eletricos completos do motor
+    EnvironmentResponse: Dados ambientais (temperatura, umidade)
+    VibrationResponse: Dados de vibracao do motor
+    MotorLatestResponse: Estado completo atual do motor
+    HistoryDataPoint: Ponto de dado historico individual
+    HistoryResponse: Resposta de consulta de historico
+    HistoryStatisticsResponse: Estatisticas de uma variavel
+    AlarmResponse: Dados de um alarme individual
+    AlarmsListResponse: Lista de alarmes
+    HealthResponse: Resposta do health check
+
+Constants:
+    AVAILABLE_VARIABLES: Lista de todas as variaveis disponiveis
+    HISTORIZED_VARIABLES: Lista de variaveis com historico habilitado
 """
 
 from datetime import datetime
@@ -10,262 +31,286 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
-# ============== Modelos de Dados Elétricos ==============
-
 class VoltageResponse(BaseModel):
-    """Resposta com dados de tensão trifásica."""
-    a: float = Field(..., description="Tensão fase A (V)")
-    b: float = Field(..., description="Tensão fase B (V)")
-    c: float = Field(..., description="Tensão fase C (V)")
+    """
+    Modelo de tensao trifasica.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"a": 220.0, "b": 221.1, "c": 219.5}
-        }
+    Representa as tensoes das tres fases do motor em Volts.
+    
+    Attributes:
+        a: Tensao da fase A em Volts
+        b: Tensao da fase B em Volts
+        c: Tensao da fase C em Volts
+    """
+    a: float
+    b: float
+    c: float
 
 
 class CurrentResponse(BaseModel):
-    """Resposta com dados de corrente trifásica."""
-    a: float = Field(..., description="Corrente fase A (A)")
-    b: float = Field(..., description="Corrente fase B (A)")
-    c: float = Field(..., description="Corrente fase C (A)")
+    """
+    Modelo de corrente trifasica.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"a": 10.5, "b": 10.4, "c": 10.6}
-        }
+    Representa as correntes das tres fases do motor em Amperes.
+    
+    Attributes:
+        a: Corrente da fase A em Amperes
+        b: Corrente da fase B em Amperes
+        c: Corrente da fase C em Amperes
+    """
+    a: float
+    b: float
+    c: float
 
 
 class PowerResponse(BaseModel):
-    """Resposta com dados de potência."""
-    active: float = Field(..., description="Potência ativa (W)")
-    reactive: float = Field(..., description="Potência reativa (VAr)")
-    apparent: float = Field(..., description="Potência aparente (VA)")
+    """
+    Modelo de potencia.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"active": 4500, "reactive": 500, "apparent": 4600}
-        }
+    Representa as potencias ativa, reativa e aparente do motor.
+    
+    Attributes:
+        active: Potencia ativa em Watts (W)
+        reactive: Potencia reativa em Volt-Amperes reativos (VAr)
+        apparent: Potencia aparente em Volt-Amperes (VA)
+    """
+    active: float
+    reactive: float
+    apparent: float
 
 
 class EnergyResponse(BaseModel):
-    """Resposta com dados de energia."""
-    active: float = Field(..., description="Energia ativa (Wh)")
-    reactive: float = Field(..., description="Energia reativa (VArh)")
-    apparent: float = Field(..., description="Energia aparente (VAh)")
+    """
+    Modelo de energia acumulada.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"active": 10000, "reactive": 1200, "apparent": 10200}
-        }
+    Representa as energias ativa, reativa e aparente acumuladas.
+    
+    Attributes:
+        active: Energia ativa acumulada em Watt-hora (Wh)
+        reactive: Energia reativa acumulada em Volt-Ampere-hora reativo (VArh)
+        apparent: Energia aparente acumulada em Volt-Ampere-hora (VAh)
+    """
+    active: float
+    reactive: float
+    apparent: float
 
 
 class ElectricalResponse(BaseModel):
-    """Resposta completa de dados elétricos."""
+    """
+    Dados eletricos completos do motor.
+    
+    Agrupa todos os parametros eletricos do motor em uma estrutura unica.
+    
+    Attributes:
+        voltage: Tensoes trifasicas (V)
+        current: Correntes trifasicas (A)
+        power: Potencias (W, VAr, VA)
+        energy: Energias acumuladas (Wh, VArh, VAh)
+        power_factor: Fator de potencia (0 a 1)
+        frequency: Frequencia da rede em Hertz (Hz)
+    """
     voltage: VoltageResponse
     current: CurrentResponse
     power: PowerResponse
     energy: EnergyResponse
-    power_factor: float = Field(..., alias="powerFactor", description="Fator de potência")
-    frequency: float = Field(..., description="Frequência (Hz)")
+    power_factor: float = Field(..., alias="powerFactor")
+    frequency: float
     
     class Config:
         populate_by_name = True
 
-
-# ============== Modelos de Dados Ambientais ==============
 
 class EnvironmentResponse(BaseModel):
-    """Resposta com dados ambientais."""
-    temperature: float = Field(..., description="Temperatura ambiente (°C)")
-    humidity: float = Field(..., description="Umidade relativa (%)")
-    case_temperature: float = Field(..., alias="caseTemperature", description="Temperatura da carcaça (°C)")
+    """
+    Dados ambientais.
+    
+    Representa as medicoes de temperatura e umidade do ambiente
+    e temperatura da carcaca do motor.
+    
+    Attributes:
+        temperature: Temperatura ambiente em graus Celsius
+        humidity: Umidade relativa do ar em porcentagem (%)
+        case_temperature: Temperatura da carcaca do motor em graus Celsius
+    """
+    temperature: float
+    humidity: float
+    case_temperature: float = Field(..., alias="caseTemperature")
     
     class Config:
         populate_by_name = True
-        json_schema_extra = {
-            "example": {"temperature": 34.5, "humidity": 55.2, "caseTemperature": 62.0}
-        }
 
-
-# ============== Modelos de Dados de Vibração ==============
 
 class VibrationResponse(BaseModel):
-    """Resposta com dados de vibração."""
-    axial: float = Field(..., description="Vibração axial (mm/s)")
-    radial: float = Field(..., description="Vibração radial (mm/s)")
+    """
+    Dados de vibracao do motor.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"axial": 0.12, "radial": 0.15}
-        }
+    Representa as medicoes de vibracao nos eixos axial e radial.
+    
+    Attributes:
+        axial: Vibracao no eixo axial em mm/s
+        radial: Vibracao no eixo radial em mm/s
+    """
+    axial: float
+    radial: float
 
 
 # ============== Modelo de Estado Completo ==============
 
 class MotorLatestResponse(BaseModel):
     """
-    Resposta com estado completo atual do motor.
+    Estado completo atual do motor.
     
-    Retorna os últimos valores conhecidos de todas as variáveis
-    do motor 50CV.
+    Agrega todas as medicoes atuais do motor em uma unica resposta,
+    incluindo dados eletricos, ambientais, de vibracao e alarmes.
+    
+    Attributes:
+        timestamp: Data/hora da ultima atualizacao
+        electrical: Dados eletricos completos
+        environment: Dados ambientais
+        vibration: Dados de vibracao
+        active_alarms: Numero de alarmes ativos
     """
-    timestamp: datetime = Field(..., description="Data/hora da leitura")
+    timestamp: datetime
     electrical: ElectricalResponse
     environment: EnvironmentResponse
     vibration: VibrationResponse
-    active_alarms: int = Field(..., description="Número de alarmes ativos")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "timestamp": "2025-08-08T12:00:00Z",
-                "electrical": {
-                    "voltage": {"a": 220.0, "b": 221.1, "c": 219.5},
-                    "current": {"a": 10.5, "b": 10.4, "c": 10.6},
-                    "power": {"active": 4500, "reactive": 500, "apparent": 4600},
-                    "energy": {"active": 10000, "reactive": 1200, "apparent": 10200},
-                    "powerFactor": 0.95,
-                    "frequency": 60.0
-                },
-                "environment": {
-                    "temperature": 34.5,
-                    "humidity": 55.2,
-                    "caseTemperature": 45.0
-                },
-                "vibration": {
-                    "axial": 0.12,
-                    "radial": 0.15
-                },
-                "active_alarms": 0
-            }
-        }
+    active_alarms: int
 
-
-# ============== Modelos de Histórico ==============
 
 class HistoryDataPoint(BaseModel):
-    """Ponto de dado histórico."""
-    timestamp: datetime = Field(..., description="Data/hora do registro")
-    value: float = Field(..., description="Valor registrado")
-    quality: str = Field(default="Good", description="Qualidade do dado")
+    """
+    Ponto de dado historico individual.
     
-    class Config:
-        json_schema_extra = {
-            "example": {"timestamp": "2025-08-08T12:00:00Z", "value": 220.5, "quality": "Good"}
-        }
+    Representa um unico ponto de dado no historico de uma variavel.
+    
+    Attributes:
+        timestamp: Data/hora do registro (formato ISO 8601)
+        value: Valor numerico da variavel
+        quality: Qualidade do dado (Good, Bad, Uncertain)
+    """
+    timestamp: str
+    value: float
+    quality: str = "Good"
 
 
 class HistoryResponse(BaseModel):
-    """Resposta com dados históricos de uma variável."""
-    variable: str = Field(..., description="Nome da variável")
-    start_time: datetime = Field(..., description="Início do período")
-    end_time: datetime = Field(..., description="Fim do período")
-    count: int = Field(..., description="Número de registros retornados")
-    data: List[HistoryDataPoint] = Field(..., description="Dados históricos")
+    """
+    Resposta de consulta de historico.
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "variable": "VoltageA",
-                "start_time": "2025-08-07T12:00:00Z",
-                "end_time": "2025-08-08T12:00:00Z",
-                "count": 2,
-                "data": [
-                    {"timestamp": "2025-08-08T12:00:00Z", "value": 220.5, "quality": "Good"},
-                    {"timestamp": "2025-08-08T11:55:00Z", "value": 220.3, "quality": "Good"}
-                ]
-            }
-        }
+    Retorna o historico de uma variavel em um periodo de tempo.
+    
+    Attributes:
+        variable: Nome da variavel consultada
+        start_time: Inicio do periodo consultado
+        end_time: Fim do periodo consultado
+        count: Numero de pontos retornados
+        data: Lista de pontos de dados historicos
+    """
+    variable: str
+    start_time: datetime
+    end_time: datetime
+    count: int
+    data: List[HistoryDataPoint]
 
 
 class HistoryStatisticsResponse(BaseModel):
-    """Resposta com estatísticas de uma variável."""
-    variable: str = Field(..., description="Nome da variável")
-    period_hours: int = Field(..., description="Período em horas")
-    min: Optional[float] = Field(None, description="Valor mínimo")
-    max: Optional[float] = Field(None, description="Valor máximo")
-    avg: Optional[float] = Field(None, description="Valor médio")
-    count: int = Field(..., description="Número de registros")
+    """
+    Estatisticas de uma variavel.
+    
+    Retorna estatisticas agregadas (minimo, maximo, media) de uma
+    variavel em um determinado periodo.
+    
+    Attributes:
+        variable: Nome da variavel
+        period_hours: Periodo em horas para o calculo
+        min: Valor minimo no periodo
+        max: Valor maximo no periodo
+        avg: Valor medio no periodo
+        count: Numero de amostras no periodo
+    """
+    variable: str
+    period_hours: int
+    min: Optional[float] = None
+    max: Optional[float] = None
+    avg: Optional[float] = None
+    count: int
 
-
-# ============== Modelos de Alarmes ==============
 
 class AlarmResponse(BaseModel):
-    """Resposta com dados de um alarme."""
-    id: str = Field(..., description="ID único do alarme")
-    timestamp: datetime = Field(..., description="Data/hora do alarme")
-    category: str = Field(..., description="Categoria (Electrical, Environment, Vibration)")
-    severity: int = Field(..., description="Severidade (100-900)")
-    severity_name: str = Field(..., description="Nome da severidade")
-    message: str = Field(..., description="Mensagem do alarme")
-    source_name: str = Field(..., description="Variável fonte")
-    value: float = Field(..., description="Valor que disparou o alarme")
-    acknowledged: bool = Field(..., description="Se foi reconhecido")
+    """
+    Dados de um alarme individual.
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "2025-08-08T12:00:00_CaseTemperature",
-                "timestamp": "2025-08-08T12:00:00Z",
-                "category": "Environment",
-                "severity": 900,
-                "severity_name": "CRITICAL",
-                "message": "Case temperature critical: 62.0°C",
-                "source_name": "CaseTemperature",
-                "value": 62.0,
-                "acknowledged": False
-            }
-        }
+    Representa um alarme gerado pelo sistema de monitoramento.
+    
+    Attributes:
+        id: Identificador unico do alarme
+        timestamp: Data/hora da ocorrencia
+        category: Categoria do alarme (Electrical, Environment, Vibration)
+        severity: Nivel de severidade numerico (100-900)
+        severity_name: Nome do nivel (INFORMATIVE, LOW, MEDIUM, HIGH, CRITICAL)
+        message: Mensagem descritiva do alarme
+        source_name: Nome da variavel que gerou o alarme
+        value: Valor que disparou o alarme
+        acknowledged: Se o alarme foi reconhecido
+    """
+    id: str
+    timestamp: datetime
+    category: str
+    severity: int
+    severity_name: str
+    message: str
+    source_name: str
+    value: float
+    acknowledged: bool
 
 
 class AlarmsListResponse(BaseModel):
-    """Resposta com lista de alarmes."""
-    active_count: int = Field(..., description="Número de alarmes ativos")
-    total_count: int = Field(..., description="Total de alarmes no período")
-    alarms: List[AlarmResponse] = Field(..., description="Lista de alarmes")
+    """
+    Lista de alarmes.
+    
+    Retorna uma lista de alarmes com contadores de ativos e total.
+    
+    Attributes:
+        active_count: Numero de alarmes ativos (nao reconhecidos)
+        total_count: Numero total de alarmes retornados
+        alarms: Lista de alarmes
+    """
+    active_count: int
+    total_count: int
+    alarms: List[AlarmResponse]
 
-
-# ============== Modelos de Health Check ==============
 
 class HealthResponse(BaseModel):
-    """Resposta de health check."""
-    status: str = Field(..., description="Status do serviço (healthy, degraded, unhealthy)")
-    timestamp: datetime = Field(..., description="Data/hora da verificação")
-    version: str = Field(..., description="Versão da API")
-    services: Dict[str, str] = Field(..., description="Status dos serviços dependentes")
+    """
+    Resposta do health check.
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "status": "healthy",
-                "timestamp": "2025-08-08T12:00:00Z",
-                "version": "1.0.0",
-                "services": {
-                    "database": "connected",
-                    "rabbitmq": "connected",
-                    "opcua": "connected"
-                }
-            }
-        }
+    Indica o estado de saude da API e seus servicos dependentes.
+    
+    Attributes:
+        status: Status geral (healthy, degraded, unhealthy)
+        timestamp: Data/hora da verificacao
+        version: Versao da API
+        services: Status de cada servico dependente
+    """
+    status: str
+    timestamp: datetime
+    version: str
+    services: Dict[str, str]
 
 
-# ============== Variáveis Disponíveis ==============
+# ============== Constantes ==============
 
 AVAILABLE_VARIABLES = [
-    # Elétricas
     "VoltageA", "VoltageB", "VoltageC",
     "CurrentA", "CurrentB", "CurrentC",
     "PowerActive", "PowerReactive", "PowerApparent",
     "EnergyActive", "EnergyReactive", "EnergyApparent",
     "PowerFactor", "Frequency",
-    # Ambientais
     "Temperature", "Humidity", "CaseTemperature",
-    # Vibração
     "Axial", "Radial"
 ]
+"""Lista de todas as variaveis disponiveis para consulta."""
 
-# Variáveis com histórico habilitado
 HISTORIZED_VARIABLES = [
     "VoltageA", "VoltageB", "VoltageC",
     "CurrentA", "CurrentB", "CurrentC",
@@ -274,3 +319,4 @@ HISTORIZED_VARIABLES = [
     "PowerFactor", "Frequency",
     "CaseTemperature"
 ]
+"""Lista de variaveis que possuem historico habilitado."""
