@@ -348,6 +348,6 @@ python main.py
 - **Grafana**: Visualizacao de dados
 
 
-## Autor
+## Autor: Manuel Moraes
 
 Desenvolvido como parte de desafio tecnico de Industria 4.0.
