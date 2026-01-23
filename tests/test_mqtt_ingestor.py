@@ -237,3 +237,251 @@ class TestVibrationReading:
         }
         result = validate_vibration(data)
         assert result is None
+
+
+class TestMQTTClientUnit:
+    """Testes unitários para MQTTClient."""
+    
+    def test_mqtt_client_init(self):
+        """Testa inicialização do MQTTClient."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        mock_settings.mqtt_client_id = "test-client"
+        mock_settings.mqtt_broker = "localhost"
+        mock_settings.mqtt_port = 1883
+        mock_settings.mqtt_topics = ["topic1", "topic2"]
+        
+        client = MQTTClient(mock_settings)
+        
+        assert client.settings == mock_settings
+        assert client.client is None
+        assert client.on_message_callback is None
+        assert client._connected is False
+    
+    def test_mqtt_client_set_message_callback(self):
+        """Testa definição de callback de mensagem."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        async def my_callback(topic, data):
+            pass
+        
+        client.set_message_callback(my_callback)
+        
+        assert client.on_message_callback == my_callback
+    
+    def test_mqtt_client_is_connected_initial(self):
+        """Testa propriedade is_connected inicial."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        assert client.is_connected is False
+    
+    def test_mqtt_client_is_connected_true(self):
+        """Testa propriedade is_connected quando conectado."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = True
+        
+        assert client.is_connected is True
+    
+    @pytest.mark.asyncio
+    async def test_mqtt_client_disconnect_not_connected(self):
+        """Testa disconnect quando não está conectado."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        # Não deve lançar exceção
+        await client.disconnect()
+        
+        assert client._connected is False
+    
+    @pytest.mark.asyncio
+    async def test_mqtt_client_disconnect_connected(self):
+        """Testa disconnect quando está conectado."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = True
+        client.client = AsyncMock()
+        client.client.disconnect = AsyncMock()
+        
+        await client.disconnect()
+        
+        assert client._connected is False
+        client.client.disconnect.assert_called_once()
+    
+    def test_mqtt_client_on_disconnect_with_exception(self):
+        """Testa _on_disconnect com exceção."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = True
+        
+        mock_client = MagicMock()
+        
+        # Chamar callback de desconexão com exceção
+        client._on_disconnect(mock_client, None, Exception("Test error"))
+        
+        assert client._connected is False
+    
+    def test_mqtt_client_on_disconnect_without_exception(self):
+        """Testa _on_disconnect sem exceção."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = True
+        
+        mock_client = MagicMock()
+        
+        # Chamar callback de desconexão sem exceção
+        client._on_disconnect(mock_client, None)
+        
+        assert client._connected is False
+    
+    def test_mqtt_client_on_subscribe(self):
+        """Testa _on_subscribe callback."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        mock_client = MagicMock()
+        
+        # Não deve lançar exceção
+        client._on_subscribe(mock_client, 1, 1, None)
+    
+    def test_mqtt_client_on_message_valid_json(self):
+        """Testa _on_message com JSON válido."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        # Mock callback
+        client.on_message_callback = AsyncMock()
+        
+        mock_client = MagicMock()
+        payload = b'{"key": "value"}'
+        
+        # Chamar on_message
+        result = client._on_message(mock_client, "test/topic", payload, 1, None)
+        
+        assert result == 0  # Sucesso
+    
+    def test_mqtt_client_on_message_invalid_json(self):
+        """Testa _on_message com JSON inválido."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        mock_client = MagicMock()
+        payload = b'invalid json'
+        
+        # Não deve lançar exceção
+        result = client._on_message(mock_client, "test/topic", payload, 1, None)
+        
+        assert result == 0
+    
+    def test_mqtt_client_on_message_no_callback(self):
+        """Testa _on_message sem callback definido."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client.on_message_callback = None
+        
+        mock_client = MagicMock()
+        payload = b'{"key": "value"}'
+        
+        # Não deve criar task
+        result = client._on_message(mock_client, "test/topic", payload, 1, None)
+        
+        assert result == 0
+    
+    def test_mqtt_client_on_connect(self):
+        """Testa _on_connect callback."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        mock_settings.mqtt_topics = ["topic1", "topic2"]
+        client = MQTTClient(mock_settings)
+        
+        mock_gmqtt = MagicMock()
+        mock_gmqtt.subscribe = MagicMock()
+        
+        # Chamar on_connect
+        client._on_connect(mock_gmqtt, {}, 0, None)
+        
+        # Deve subscrever aos tópicos
+        assert mock_gmqtt.subscribe.call_count == 2
+
+
+class TestMQTTClientProcessMessage:
+    """Testes para _process_message."""
+    
+    @pytest.mark.asyncio
+    async def test_process_message_success(self):
+        """Testa processamento de mensagem com sucesso."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        callback = AsyncMock()
+        client.on_message_callback = callback
+        
+        await client._process_message("test/topic", {"key": "value"})
+        
+        callback.assert_called_once_with("test/topic", {"key": "value"})
+    
+    @pytest.mark.asyncio
+    async def test_process_message_callback_error(self):
+        """Testa tratamento de erro no callback."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        
+        callback = AsyncMock(side_effect=Exception("Callback error"))
+        client.on_message_callback = callback
+        
+        # Não deve propagar exceção
+        await client._process_message("test/topic", {"key": "value"})
+
+
+class TestMQTTClientIsConnected:
+    """Testes para propriedade is_connected."""
+    
+    def test_is_connected_false(self):
+        """Testa is_connected quando desconectado."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = False
+        
+        assert client.is_connected is False
+    
+    def test_is_connected_true(self):
+        """Testa is_connected quando conectado."""
+        from mqtt_client import MQTTClient
+        
+        mock_settings = MagicMock()
+        client = MQTTClient(mock_settings)
+        client._connected = True
+        
+        assert client.is_connected is True
