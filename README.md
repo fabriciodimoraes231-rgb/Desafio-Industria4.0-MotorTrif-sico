@@ -15,7 +15,8 @@ Desenvolvido como parte do desafio tecnico para demonstracao de conhecimentos em
 6. [Documentacao do Codigo](#documentacao-do-codigo)
 7. [Testes](#testes)
 8. [Grafana](#grafana)
-9. [Desenvolvimento Local](#desenvolvimento-local)
+9. [Banco de Dados](#banco-de-dados)
+10. [Desenvolvimento Local](#desenvolvimento-local)
 
 
 ## Arquitetura
@@ -291,6 +292,86 @@ O dashboard pre-configurado inclui:
 - Medidores de potencia ativa/reativa/aparente
 - Indicadores de temperatura
 - Painel de alarmes ativos
+
+
+## Banco de Dados
+
+O sistema utiliza **SQLite** para persistencia de dados historicos e alarmes. O banco de dados e gerenciado pelo servico `opcua-server`.
+
+### Localizacao
+
+- **No container**: `/app/data/history.db`
+- **Volume Docker**: Persistido automaticamente
+
+### Acessar o Banco de Dados
+
+```bash
+# Copiar banco do container para maquina local
+docker cp opcua-server:/app/data/history.db ./history.db
+
+# Acessar via sqlite3
+sqlite3 history.db
+```
+
+### Tabelas Disponiveis
+
+| Tabela | Descricao |
+|--------|-----------|
+| `alarm_history` | Historico de alarmes gerados |
+| `current_values` | Valores atuais das variaveis |
+| `variable_history` | Historico geral de variaveis |
+| `variable_node_mapping` | Mapeamento variavel -> NodeId OPC UA |
+| `history_2_*` | Historico OPC UA por variavel individual |
+
+### Consultas Uteis
+
+```sql
+-- Ver alarmes recentes
+SELECT * FROM alarm_history ORDER BY timestamp DESC LIMIT 10;
+
+-- Ver valores atuais de todas as variaveis
+SELECT * FROM current_values;
+
+-- Ver historico de uma variavel especifica
+SELECT * FROM variable_history 
+WHERE variable_name = 'VoltageA' 
+ORDER BY timestamp DESC LIMIT 10;
+
+-- Contar total de registros de historico
+SELECT COUNT(*) FROM variable_history;
+
+-- Ver mapeamento de variaveis para NodeIds
+SELECT * FROM variable_node_mapping;
+
+-- Estatisticas de uma variavel
+SELECT 
+    variable_name,
+    MIN(value) as min_value,
+    MAX(value) as max_value,
+    AVG(value) as avg_value,
+    COUNT(*) as total_records
+FROM variable_history 
+WHERE variable_name = 'VoltageA'
+GROUP BY variable_name;
+```
+
+### Acesso via API REST
+
+Alternativamente, os dados podem ser acessados via API:
+
+```bash
+# Valores atuais
+curl http://localhost:8000/api/v1/motor/latest
+
+# Historico de uma variavel (ultima hora)
+curl "http://localhost:8000/api/v1/motor/history/VoltageA?hours=1"
+
+# Estatisticas
+curl "http://localhost:8000/api/v1/motor/history/VoltageA/statistics?hours=24"
+
+# Alarmes
+curl http://localhost:8000/api/v1/motor/alarms
+```
 
 
 ## Desenvolvimento Local
