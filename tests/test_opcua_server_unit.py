@@ -24,6 +24,7 @@ def mock_settings():
     settings.rabbitmq_user = "guest"
     settings.rabbitmq_pass = "guest"
     settings.database_url = "sqlite:///./test.db"
+    settings.lds_register_interval = 60
     return settings
 
 

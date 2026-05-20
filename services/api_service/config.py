@@ -5,6 +5,7 @@ Este módulo contém as configurações carregadas via variáveis de ambiente
 para o serviço de API REST.
 """
 
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -46,10 +47,7 @@ class Settings(BaseSettings):
     rabbitmq_pass: str = "admin123"
     rabbitmq_exchange: str = "motor_data"
     
-    class Config:
-        """Configuração do Pydantic."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 @lru_cache

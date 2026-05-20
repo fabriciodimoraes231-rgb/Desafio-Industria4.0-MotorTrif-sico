@@ -25,7 +25,7 @@ Functions:
 
 from typing import Any, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import logging
 
 logger = logging.getLogger(__name__)
@@ -115,8 +115,7 @@ class ElectricalReading(BaseModel):
     powerFactor: float = Field(..., ge=0, le=1, alias="powerFactor")
     frequency: float = Field(..., ge=0, le=100)
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EnvironmentReading(BaseModel):
@@ -136,8 +135,7 @@ class EnvironmentReading(BaseModel):
     humidity: float = Field(..., ge=0, le=100)
     caseTemperature: float = Field(..., ge=-40, le=150, alias="caseTemperature")
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class VibrationReading(BaseModel):

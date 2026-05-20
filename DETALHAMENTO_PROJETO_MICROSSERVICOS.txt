@@ -1,0 +1,154 @@
+DETALHAMENTO DO PROJETO - MOTOR TRIFASICO 50CV
+
+1) RESUMO EXECUTIVO
+
+Este projeto implementa um pipeline industrial de monitoramento em tempo real com arquitetura de microservicos.
+Objetivo principal: receber telemetria do motor, processar dados, gerar alarmes, historizar variaveis e expor informacoes para consumo operacional (API e dashboard).
+
+Tecnologias centrais:
+- MQTT (ingestao de telemetria)
+- RabbitMQ (desacoplamento por mensageria)
+- OPC UA (modelo industrial, estado online e historico)
+- FastAPI (exposicao REST)
+- Grafana (observabilidade e visualizacao)
+
+
+2) FLUXO DE DADOS (FIM A FIM)
+
+1. O broker MQTT recebe dados dos topicos do motor (eletrico, ambiente, vibracao).
+2. O microservico mqtt-ingestor valida os dados e publica no RabbitMQ (exchange topic).
+3. O microservico opcua-server consome as filas do RabbitMQ e atualiza variaveis OPC UA.
+4. O opcua-server aplica regras de alarme e grava historico em SQLite.
+5. O microservico api-service le dados atuais/historicos/alarmes e expoe endpoints REST.
+6. O Grafana consulta a API REST e monta paineis de tempo real e historico.
+
+
+3) MICROSSERVICOS E IMPORTANCIA DE CADA UM
+
+3.1) mqtt-ingestor (services/mqtt_ingestor)
+Papel:
+- Ponte entre o mundo MQTT e o barramento interno RabbitMQ.
+- Valida payloads por topico antes de encaminhar.
+
+Importancia:
+- Impede que dados malformados contaminem o restante do sistema.
+- Isola a fonte de dados externa da camada industrial interna.
+- Facilita escalabilidade (novas fontes MQTT sem alterar OPC UA/API).
+
+Risco se ausente:
+- OPC UA e API ficariam acoplados diretamente ao MQTT, com menos controle de qualidade e menor resiliencia.
+
+
+3.2) opcua-server (services/opcua_server) [CRITICO]
+Papel:
+- Core industrial da solucao.
+- Mantem servidor OPC UA em opc.tcp://0.0.0.0:4840/motor50cv/server.
+- Constrói nodeset padronizado (Electrical, Environment, Vibration).
+- Atualiza variaveis em tempo real com timestamp.
+- Habilita historizacao de variaveis-chave (7 dias, via history manager + SQLite).
+- Gera alarmes (sobretensao, subtensao, sobrecorrente e temperatura critica).
+
+Importancia:
+- Converte telemetria em um modelo industrial interoperavel (padrao OPC UA).
+- Centraliza regras de dominio industrial (limites e severidade de alarme).
+- Mantem estado operacional e trilha historica para analise e auditoria.
+- Permite integracao futura com SCADA/MES/IIoT clients OPC UA.
+
+Risco se ausente:
+- Perda da camada industrial padronizada.
+- Sem historico consistente no formato esperado do projeto.
+- Sem motor de alarmes no ponto central do dominio.
+
+
+3.3) api-service (services/api_service)
+Papel:
+- Expor dados por REST para integracao e visualizacao.
+- Endpoints de latest, historico, estatisticas, alarmes, acknowledge e timeseries.
+
+Importancia:
+- Torna os dados acessiveis para clientes web, BI e dashboards.
+- Traduz complexidade industrial para contratos HTTP simples.
+- Fornece camada de acesso para o Grafana via plugin JSON.
+
+Risco se ausente:
+- Grafana e consumidores externos teriam que acessar OPC UA/DB diretamente.
+
+
+4) FOCO ESPECIAL: GRAFANA
+
+4.1) Como esta configurado
+- Container grafana/grafana com porta 3000.
+- Provisionamento automatico de datasource e dashboard.
+- Datasource: plugin marcusolsson-json-datasource.
+- URL interna do datasource: http://api-service:8000.
+- Dashboard principal: grafana/dashboards/motor50cv.json.
+
+4.2) O que o Grafana entrega no projeto
+- Visao operacional em tempo real (tensao, corrente, potencia etc).
+- Indicador de alarmes ativos.
+- Tendencias historicas para manutencao preditiva.
+- Camada de observabilidade para tomada de decisao rapida.
+
+4.3) Importancia do Grafana
+- Sem Grafana, os dados continuam existindo, mas sem visibilidade gerencial imediata.
+- Ele transforma telemetria em insight visual acionavel.
+
+4.4) Observacao operacional relevante
+- O compose usa volume temporario para /var/lib/grafana (grafana_data_temp).
+- Resultado: configuracoes internas do Grafana nao persistem ao recriar container.
+- O provisionamento cobre isso carregando datasource/dashboard novamente no startup.
+
+
+5) FOCO ESPECIAL: OPC UA
+
+5.1) Papel estrategico no projeto
+- OPC UA e o padrao industrial que organiza semanticamente os sinais do motor.
+- Ele e a fronteira entre dados crus de sensor e informacao de processo.
+
+5.2) O que foi implementado
+- Namespace dedicado: http://motor50cv.industrial/ua.
+- Arvore de nos:
+  - Electrical (14 variaveis)
+  - Environment (3 variaveis)
+  - Vibration (2 variaveis)
+- Escrita assincrona de DataValue com SourceTimestamp e ServerTimestamp.
+- Historizacao de variaveis selecionadas com storage SQLite.
+- Regras de alarme com severidade e historico de eventos.
+
+5.3) Importancia do OPC UA
+- Padronizacao: facilita interoperabilidade com sistemas industriais.
+- Governanca: concentra estado, historico e alarmes do processo.
+- Escalabilidade: permite acrescentar novos consumidores sem quebrar produtores.
+
+
+6) COMPONENTES DE APOIO (INFRA E FERRAMENTAS)
+
+6.1) rabbitmq
+- Importancia: desacopla produtor/consumidor, absorve picos e aumenta resiliencia.
+
+6.2) mosquitto
+- Importancia: broker MQTT local para entrada de telemetria.
+
+6.3) mqtt-producer (profile producer)
+- Importancia: simulacao de dados para teste e demonstracao sem planta real.
+
+
+7) POR QUE ESTA ARQUITETURA E BOA PARA INDUSTRIA 4.0
+
+- Desacoplamento por eventos: evolucao independente dos servicos.
+- Interoperabilidade industrial via OPC UA.
+- Observabilidade operacional via API + Grafana.
+- Base para alarmistica e historico orientados a manutencao preditiva.
+- Facilidade de testes (unidade, integracao e E2E no repositorio).
+
+
+8) CONCLUSAO PRATICA
+
+Se fosse para priorizar importancia:
+1) opcua-server: nucleo industrial (estado, historico, alarmes).
+2) mqtt-ingestor: qualidade e entrada confiavel dos dados.
+3) api-service: distribuicao dos dados para consumo externo.
+4) grafana: leitura operacional e suporte a decisao.
+
+Sem o OPC UA, o projeto perde a espinha dorsal industrial.
+Sem Grafana, perde visibilidade e velocidade de resposta operacional.

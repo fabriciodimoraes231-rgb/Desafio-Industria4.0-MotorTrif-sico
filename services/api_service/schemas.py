@@ -28,7 +28,7 @@ Constants:
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class VoltageResponse(BaseModel):
@@ -116,8 +116,7 @@ class ElectricalResponse(BaseModel):
     power_factor: float = Field(..., alias="powerFactor")
     frequency: float
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EnvironmentResponse(BaseModel):
@@ -136,8 +135,7 @@ class EnvironmentResponse(BaseModel):
     humidity: float
     case_temperature: float = Field(..., alias="caseTemperature")
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class VibrationResponse(BaseModel):

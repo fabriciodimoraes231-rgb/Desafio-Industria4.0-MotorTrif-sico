@@ -157,7 +157,11 @@ class MQTTClient:
             
             # Chamar callback se definido
             if self.on_message_callback:
-                asyncio.create_task(self._process_message(topic, data))
+                coro = self._process_message(topic, data)
+                try:
+                    asyncio.create_task(coro)
+                except RuntimeError:
+                    coro.close()
                 
         except json.JSONDecodeError as e:
             logger.error(f"Erro ao decodificar JSON de {topic}: {e}")
