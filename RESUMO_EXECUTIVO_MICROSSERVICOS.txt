@@ -1,0 +1,54 @@
+RESUMO EXECUTIVO - ARQUITETURA DE MICROSSERVICOS (MOTOR 50CV)
+
+Objetivo do sistema
+Monitorar um motor trifasico 50CV em tempo real, com confiabilidade industrial, historico operacional e suporte a decisao via dashboard.
+
+Visao geral da arquitetura
+O projeto segue um fluxo orientado a eventos: dados chegam por MQTT, passam por validacao e mensageria interna (RabbitMQ), sao convertidos para modelo industrial OPC UA, ficam disponiveis via API REST e sao visualizados no Grafana.
+
+Fluxo ponta a ponta
+1) Sensores/simulador publicam dados em topicos MQTT.
+2) mqtt-ingestor valida e publica no RabbitMQ.
+3) opcua-server consome mensagens, atualiza variaveis OPC UA, gera alarmes e historiza dados.
+4) api-service expoe dados atuais, historicos, estatisticas e alarmes.
+5) Grafana consulta a API e apresenta paineis operacionais.
+
+Importancia de cada microservico
+
+1) mqtt-ingestor
+Funcao: garantir entrada confiavel de dados, validando payloads antes de encaminhar.
+Valor: protege o restante do sistema contra dados invalidos e desacopla a fonte MQTT da camada industrial.
+
+2) opcua-server (componente mais critico)
+Funcao: nucleo industrial da solucao.
+Valor: organiza dados em padrao OPC UA (interoperabilidade), atualiza estado em tempo real, aplica regras de alarme e mantem historico. E a espinha dorsal tecnica do projeto.
+
+3) api-service
+Funcao: disponibilizar os dados por REST para integracoes e visualizacao.
+Valor: simplifica o consumo para clientes web, BI e Grafana, sem exigir acesso direto ao OPC UA ou banco.
+
+Foco especial: OPC UA
+O OPC UA e o principal diferencial industrial da arquitetura. Ele transforma telemetria em um modelo padronizado e semanticamente organizado (Electrical, Environment, Vibration), com timestamps, historico e alarmistica. Isso viabiliza integracao com ecossistema industrial (SCADA/MES/IIoT) e aumenta maturidade operacional.
+
+Foco especial: Grafana
+O Grafana e a camada de observabilidade e decisao. Com datasource JSON apontando para a API, ele entrega visao de tempo real, tendencias historicas e monitoramento de alarmes ativos. Sem Grafana, o sistema ainda funciona, mas perde agilidade operacional e capacidade de leitura executiva do processo.
+
+Papel dos componentes de apoio
+- RabbitMQ: desacoplamento, resiliencia e absorcao de picos de carga.
+- Mosquitto: broker de entrada MQTT.
+- MQTT Producer: simulacao para testes e demonstracao sem planta real.
+
+Beneficios para Industria 4.0
+- Interoperabilidade industrial (OPC UA).
+- Arquitetura escalavel e desacoplada.
+- Rastreabilidade historica para analise e manutencao preditiva.
+- Visibilidade operacional em tempo real com dashboard.
+
+Conclusao executiva
+Se a prioridade for continuidade e valor de negocio:
+1) opcua-server e o ativo tecnico central.
+2) mqtt-ingestor garante qualidade na entrada.
+3) api-service viabiliza consumo e integracao.
+4) Grafana converte dados em acao operacional.
+
+Em termos praticos: OPC UA sustenta a confiabilidade industrial; Grafana sustenta a decisao rapida.
