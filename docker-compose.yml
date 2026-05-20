@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  # MQTT Broker Local (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+    restart: unless-stopped
+    networks:
+      - motor_network
+
   # RabbitMQ - Message Broker
   rabbitmq:
     image: rabbitmq:3-management
@@ -30,8 +43,10 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      mosquitto:
+        condition: service_started
     environment:
-      - MQTT_BROKER=lse.dev.br
+      - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
@@ -123,8 +138,10 @@ services:
       context: ./scripts
       dockerfile: Dockerfile
     container_name: mqtt-producer
+    depends_on:
+      - mosquitto
     environment:
-      - MQTT_HOST=lse.dev.br
+      - MQTT_HOST=mosquitto
       - MQTT_PORT=1883
       - ALARM_RATE=0.1
       - INTERVAL=2.0
@@ -135,6 +152,7 @@ services:
       - motor_network
 
 volumes:
+  mosquitto_data:
   rabbitmq_data:
   opcua_data:
   api_data:
