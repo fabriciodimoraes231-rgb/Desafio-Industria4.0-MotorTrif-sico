@@ -1,5 +1,9 @@
 # Motor50CV - Sistema de Monitoramento Industrial
 
+[![CI](https://github.com/fabriciodimoraes231-rgb/Desafio-Industria4.0-MotorTrif-sico/actions/workflows/ci.yml/badge.svg)](https://github.com/fabriciodimoraes231-rgb/Desafio-Industria4.0-MotorTrif-sico/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+
 Sistema completo de monitoramento de motor trifasico de 50cv utilizando OPC UA, MQTT, RabbitMQ e FastAPI.
 
 Desenvolvido como parte do desafio tecnico para demonstracao de conhecimentos em Industria 4.0.
@@ -432,3 +436,7 @@ python main.py
 ## Autor: Manuel Moraes
 
 Desenvolvido como parte de desafio tecnico de Industria 4.0.
+
+## Licença
+
+[Apache 2.0](LICENSE) © Manuel Moraes
